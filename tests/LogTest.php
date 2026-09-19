@@ -9,17 +9,24 @@ use NoriaLabs\Platform\Log\Redactor;
 use NoriaLabs\Platform\Tests\Fixtures\StubLogContext;
 
 describe('redacting a payload', function (): void {
-    it('masks a password rather than printing it', function (): void {
+    it('blanks a password rather than printing it', function (): void {
         expect(Redactor::scrub(['password' => 'hunter2secret']))
-            ->toBe(['password' => 'hu*********et']);
+            ->toBe(['password' => '[redacted]']);
     });
 
-    it('leaves enough of a token to answer a support ticket about it', function (): void {
-        expect(Redactor::scrub(['token' => 'abcdef123456'])['token'])
-            ->toBe('ab********56');
+    /*
+     * Partial masking leaves a support ticket answerable and also leaves
+     * four characters of a phone number in an aggregator. A product picks.
+     */
+    it('leaves enough of a token to answer a support ticket, when asked to', function (): void {
+        config(['noria.log.mask' => 'partial']);
+
+        expect(Redactor::scrub(['token' => 'abcdef123456'])['token'])->toBe('ab********56');
     });
 
-    it('hides a short value completely rather than almost completely', function (): void {
+    it('hides a short value completely even when masking partially', function (): void {
+        config(['noria.log.mask' => 'partial']);
+
         expect(Redactor::scrub(['pin' => '1234'])['pin'])->toBe('****');
     });
 
@@ -35,17 +42,17 @@ describe('redacting a payload', function (): void {
         expect(Redactor::sensitive('daraja_consumer_secret'))->toBeTrue();
     });
 
-    it('masks personal data, not only credentials', function (): void {
+    it('blanks personal data, not only credentials', function (): void {
         $scrubbed = Redactor::scrub(['email' => 'ada@example.com', 'msisdn' => '254712345678']);
 
-        expect($scrubbed['email'])->not->toContain('ada@example.com');
-        expect($scrubbed['msisdn'])->not->toContain('712345678');
+        expect($scrubbed['email'])->toBe('[redacted]');
+        expect($scrubbed['msisdn'])->toBe('[redacted]');
     });
 
     it('reaches a credential nested inside a payload', function (): void {
         $scrubbed = Redactor::scrub(['request' => ['headers' => ['authorization' => 'Bearer abcdef123456']]]);
 
-        expect($scrubbed['request']['headers']['authorization'])->not->toContain('abcdef');
+        expect($scrubbed['request']['headers']['authorization'])->toBe('[redacted]');
     });
 
     it('leaves everything that is not sensitive exactly as it was', function (): void {
@@ -70,7 +77,7 @@ describe('redacting a payload', function (): void {
 describe('writing a log line', function (): void {
     it('scrubs the context before it reaches the log', function (): void {
         Log::shouldReceive('log')->once()->withArgs(
-            fn (string $level, string $message, array $context): bool => ! str_contains((string) $context['password'], 'hunter2')
+            fn (string $level, string $message, array $context): bool => $context['password'] === '[redacted]'
         );
 
         Logger::app('signed in', ['password' => 'hunter2secret']);
@@ -96,13 +103,28 @@ describe('writing a log line', function (): void {
         Logger::auth('otp issued');
     });
 
-    it('records an exception with where it came from', function (): void {
+    /*
+     * Handed over whole: Monolog renders the trace and every previous
+     * cause, and a line saying what failed without saying where is the one
+     * nobody can act on.
+     */
+    it('hands the throwable over whole, trace and causes included', function (): void {
         Log::shouldReceive('log')->once()->withArgs(
             fn (string $level, string $message, array $context): bool => $level === 'error'
-                && $context['exception'] === RuntimeException::class
+                && $context['exception'] instanceof RuntimeException
+                && $context['exception']->getPrevious() instanceof InvalidArgumentException
         );
 
-        Logger::exception('backup failed', new RuntimeException('disk full'));
+        Logger::exception('failed', new RuntimeException('disk full', 0, new InvalidArgumentException('no disk')));
+    });
+
+    it('sends exceptions to the channel the product keeps for them', function (): void {
+        config(['noria.log.exception_channel' => 'errors', 'logging.channels.errors' => ['driver' => 'null']]);
+
+        Log::shouldReceive('channel')->once()->with('errors')->andReturnSelf();
+        Log::shouldReceive('log')->once();
+
+        Logger::exception('failed', new RuntimeException('disk full'));
     });
 });
 
@@ -123,7 +145,7 @@ describe('a channel the product defined', function (): void {
 
     it('scrubs a named channel like any other', function (): void {
         Log::shouldReceive('log')->once()->withArgs(
-            fn (string $level, string $message, array $context): bool => ! str_contains((string) $context['password'], 'hunter2')
+            fn (string $level, string $message, array $context): bool => $context['password'] === '[redacted]'
         );
 
         Logger::create('errors', 'something went wrong', ['password' => 'hunter2secret']);
@@ -158,7 +180,7 @@ describe('what must not be touched', function (): void {
             'payload' => ['phone' => '254712345678', 'token' => 'abcdef123456'],
         ]);
 
-        expect($scrubbed['password'])->not->toContain('hunter2');
+        expect($scrubbed['password'])->toBe('[redacted]');
         expect($scrubbed['payload'])->toBe(['phone' => '254712345678', 'token' => 'abcdef123456']);
     });
 
@@ -242,7 +264,7 @@ describe('ambient context', function (): void {
         app()->bind(LogContext::class, StubLogContext::class);
 
         Log::shouldReceive('log')->once()->withArgs(
-            fn (string $level, string $message, array $context): bool => ! str_contains((string) $context['email'], 'ada@example.com')
+            fn (string $level, string $message, array $context): bool => $context['email'] === '[redacted]'
         );
 
         Logger::app('a line');

@@ -133,13 +133,19 @@ final class Redactor
         return false;
     }
 
+    /**
+     * Blanked by default. Partial masking leaves a support ticket
+     * answerable - the token ended 9f - and also leaves four characters of
+     * somebody's phone number in an aggregator, which is a trade a product
+     * should make deliberately rather than inherit.
+     */
     public static function mask(mixed $value): mixed
     {
         if (is_array($value)) {
             return self::scrub($value);
         }
 
-        if (! is_scalar($value)) {
+        if (! is_scalar($value) || Config::string('noria.log.mask', 'redact') !== 'partial') {
             return '[redacted]';
         }
 

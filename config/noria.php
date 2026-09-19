@@ -131,6 +131,17 @@ return [
          * is sensitive in one product is sensitive everywhere the log ends
          * up. Normalised the same way - api_key, Api-Key and apikey are one.
          */
+        /*
+         * 'redact' blanks a value outright. 'partial' keeps the first and
+         * last two characters, which leaves a support ticket answerable
+         * and also leaves four characters of a phone number in an
+         * aggregator. A trade to make deliberately.
+         */
+        'mask' => env('NORIA_LOG_MASK', 'redact'),
+
+        /* Where exceptions go. Some products keep a channel for them. */
+        'exception_channel' => env('NORIA_LOG_EXCEPTION_CHANNEL', 'app'),
+
         'credential_keys' => [],
         'credential_suffixes' => [],
         'pii_keys' => [],

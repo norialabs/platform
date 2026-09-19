@@ -38,15 +38,22 @@ final class Logger
         self::write('backup', $message, $context, $level);
     }
 
-    /** @param array<array-key, mixed> $context */
+    /**
+     * The throwable is handed over whole rather than flattened to a class
+     * and a message: Monolog's formatter renders the trace and every
+     * previous cause, and a line saying what failed without saying where
+     * is the one nobody can act on.
+     *
+     * @param  array<array-key, mixed>  $context
+     */
     public static function exception(string $message, Throwable $e, array $context = [], string $level = 'error'): void
     {
-        self::write('app', $message, [
-            ...$context,
-            'exception' => $e::class,
-            'reason' => $e->getMessage(),
-            'at' => $e->getFile().':'.$e->getLine(),
-        ], $level);
+        self::write(
+            Config::string('noria.log.exception_channel', 'app'),
+            $message,
+            [...$context, 'exception' => $e],
+            $level,
+        );
     }
 
     /**
