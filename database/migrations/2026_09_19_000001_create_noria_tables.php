@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Schema;
+use NoriaLabs\Platform\Db\Timestamps;
 use NoriaLabs\Platform\Platform;
 
 return new class extends Migration
@@ -15,8 +17,29 @@ return new class extends Migration
         return Platform::connection();
     }
 
+    /** Whether the package writes timezone aware timestamps. */
+    private function tz(): bool
+    {
+        return Timestamps::aware();
+    }
+
+    private function stamps(Blueprint $table): void
+    {
+        $this->tz() ? $table->timestampsTz() : $table->timestamps();
+    }
+
+    private function moment(Blueprint $table, string $name): ColumnDefinition
+    {
+        return $this->tz() ? $table->timestampTz($name) : $table->timestamp($name);
+    }
+
     public function up(): void
     {
+        // Refused here rather than discovered by a sign-in code born
+        // expired: a naive write into a timestamptz column takes the
+        // session's timezone, not the application's.
+        Timestamps::assertAligned();
+
         /*
          * Both tables carry the tenant column but sit outside tenancy: the
          * trail outlives the workspace it describes, and a sign-in code is
@@ -47,7 +70,7 @@ return new class extends Migration
             $table->string('ip', 64)->nullable();
             $table->string('user_agent', 512)->nullable();
             $table->string('request_id', 64)->nullable()->index();
-            $table->timestamp('created_at')->nullable();
+            $this->moment($table, 'created_at')->nullable();
 
             $table->index(['target_type', 'target_id']);
             $table->index([$tenantColumn, 'created_at']);
@@ -65,9 +88,9 @@ return new class extends Migration
             $table->string('channel', 16)->default('email');
             $table->string('code_hash', 256);
             $table->unsignedSmallInteger('attempts')->default(0);
-            $table->timestamp('expires_at')->index();
-            $table->timestamp('consumed_at')->nullable();
-            $table->timestamps();
+            $this->moment($table, 'expires_at')->index();
+            $this->moment($table, 'consumed_at')->nullable();
+            $this->stamps($table);
         });
 
         /*
@@ -84,10 +107,10 @@ return new class extends Migration
             $table->string('token_hash', 64)->unique();
             $table->string('invited_by', 64)->nullable();
             $table->string('accepted_by', 64)->nullable();
-            $table->timestamp('expires_at')->index();
-            $table->timestamp('accepted_at')->nullable();
-            $table->timestamp('revoked_at')->nullable();
-            $table->timestamps();
+            $this->moment($table, 'expires_at')->index();
+            $this->moment($table, 'accepted_at')->nullable();
+            $this->moment($table, 'revoked_at')->nullable();
+            $this->stamps($table);
         });
     }
 

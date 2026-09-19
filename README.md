@@ -234,6 +234,25 @@ believe forwarded headers at all.
 or a 504 means the application is not answering, so the page for it cannot be rendered by the
 application and its stylesheet cannot be fetched either - both are baked in ahead of time.
 
+### Timestamps
+
+`noria.timestamps` is `tz` by default, so the package's columns are `timestamptz`.
+
+That needs the connection to agree with the application. Eloquent writes a naive
+`Y-m-d H:i:s`, and Postgres reads it into a `timestamptz` using the **session** timezone - so a
+server sitting on `Africa/Nairobi` under an application on UTC stores every moment three hours
+early. Nothing errors; a sign-in code is simply born expired, and it only reproduces on the one
+machine whose server has that default.
+
+```php
+// config/database.php
+'timezone' => env('DB_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+```
+
+The migration refuses without it, and `noria:tenancy-check` reports it afterwards, because a
+connection added later would otherwise go unnoticed until the next migration. Set
+`noria.timestamps` to `plain` for a host whose other tables are not timezone aware.
+
 ### Money
 
 Integers throughout: a float cannot hold a third of a shilling and a sum of floats does not

@@ -17,6 +17,7 @@ use NoriaLabs\Platform\Db\Dumpers\SqliteDumper;
 use NoriaLabs\Platform\Db\Identifier;
 use NoriaLabs\Platform\Db\Restore;
 use NoriaLabs\Platform\Db\Schemas;
+use NoriaLabs\Platform\Db\Timestamps;
 
 function dropRestoreTarget(): void
 {
@@ -345,4 +346,66 @@ describe('the preflight', function (): void {
     it('refuses to dump as a role that would produce an empty file', function (): void {
         app(Backup::class)->run('backups');
     })->throws(RuntimeException::class, 'bypass row level security');
+});
+
+describe('timezone aware timestamps', function (): void {
+    beforeEach(function (): void {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('The mismatch only exists on Postgres.');
+        }
+    });
+
+    /*
+     * Eloquent writes a naive 'Y-m-d H:i:s'. Postgres reads that into a
+     * timestamptz using the session timezone, so a connection on
+     * Africa/Nairobi under an application on UTC stores every moment three
+     * hours out. Nothing errors; a sign-in code is simply born expired.
+     */
+    it('refuses a connection whose timezone is not the application one', function (): void {
+        DB::statement("set time zone 'Africa/Nairobi'");
+
+        try {
+            Timestamps::assertAligned();
+        } finally {
+            DB::statement("set time zone 'UTC'");
+        }
+    })->throws(RuntimeException::class, 'wrong moment');
+
+    it('accepts a connection that agrees with the application', function (): void {
+        Timestamps::assertAligned();
+
+        expect(true)->toBeTrue();
+    });
+
+    it('treats UTC and its spellings as one timezone', function (): void {
+        DB::statement("set time zone 'Etc/UTC'");
+
+        try {
+            Timestamps::assertAligned();
+            expect(true)->toBeTrue();
+        } finally {
+            DB::statement("set time zone 'UTC'");
+        }
+    });
+
+    it('has nothing to check when the product asked for plain timestamps', function (): void {
+        config(['noria.timestamps' => 'plain']);
+        DB::statement("set time zone 'Africa/Nairobi'");
+
+        try {
+            Timestamps::assertAligned();
+            expect(Timestamps::aware())->toBeFalse();
+        } finally {
+            DB::statement("set time zone 'UTC'");
+        }
+    });
+
+    it('writes the columns timezone aware by default', function (): void {
+        $type = DB::scalar(
+            "select data_type from information_schema.columns where table_name = ? and column_name = 'expires_at'",
+            ['invitations'],
+        );
+
+        expect($type)->toBe('timestamp with time zone');
+    });
 });

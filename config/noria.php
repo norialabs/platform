@@ -19,6 +19,14 @@ return [
 
     'load_migrations' => (bool) env('NORIA_LOAD_MIGRATIONS', true),
 
+    /*
+     * Timestamp columns the package creates. 'tz' is timestamptz, which is
+     * what an estate spanning more than one offset needs and what these
+     * products already write for the columns they thought about. 'plain'
+     * is Laravel's default, for a host whose other tables use that.
+     */
+    'timestamps' => env('NORIA_TIMESTAMPS', 'tz'),
+
     'tenancy' => [
         'enabled' => (bool) env('NORIA_TENANCY', true),
 

@@ -163,3 +163,43 @@ describe('the static error pages', function (): void {
         $this->artisan('noria:build-error-pages')->assertSuccessful();
     });
 });
+
+describe('the deployment check and the clock', function (): void {
+    beforeEach(function (): void {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('The mismatch only exists on Postgres.');
+        }
+    });
+
+    /*
+     * Checked here as well as at migrate time: a connection added later,
+     * or a config edit, would otherwise go unnoticed until the next
+     * migration, by which point the rows are already wrong.
+     */
+    it('fails when the connection would store every moment at the wrong instant', function (): void {
+        DB::statement("set time zone 'Africa/Nairobi'");
+
+        try {
+            $this->artisan('noria:tenancy-check')
+                ->expectsOutputToContain('wrong moment')
+                ->assertFailed();
+        } finally {
+            DB::statement("set time zone 'UTC'");
+        }
+    });
+
+    it('passes when the clock and the policies both agree', function (): void {
+        $this->artisan('noria:tenancy-check')->assertSuccessful();
+    });
+
+    it('says nothing about the clock when the product asked for plain timestamps', function (): void {
+        config(['noria.timestamps' => 'plain']);
+        DB::statement("set time zone 'Africa/Nairobi'");
+
+        try {
+            $this->artisan('noria:tenancy-check')->assertSuccessful();
+        } finally {
+            DB::statement("set time zone 'UTC'");
+        }
+    });
+});

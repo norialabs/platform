@@ -48,6 +48,9 @@ abstract class TestCase extends Orchestra
                 'prefix' => '',
                 'search_path' => 'public',
                 'sslmode' => 'prefer',
+                // As every product does: without it the session timezone
+                // decides what a naive write means.
+                'timezone' => 'UTC',
             ]);
             $app['config']->set('database.default', 'noria_pg');
 
@@ -62,6 +65,7 @@ abstract class TestCase extends Orchestra
                     'prefix' => '',
                     'search_path' => 'public',
                     'sslmode' => 'prefer',
+                    'timezone' => 'UTC',
                 ]);
             }
         } else {
