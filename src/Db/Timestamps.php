@@ -10,19 +10,6 @@ use NoriaLabs\Platform\Platform;
 use RuntimeException;
 use Throwable;
 
-/**
- * Whether the package writes timezone aware timestamps, and whether this
- * connection can be trusted with them.
- *
- * Eloquent writes a naive 'Y-m-d H:i:s'. Postgres reads that into a
- * timestamptz using the *session* timezone, so a connection sitting on
- * Africa/Nairobi while the application runs on UTC silently stores every
- * moment three hours out. Nothing errors; a sign-in code is simply born
- * expired.
- *
- * The fix is one line of connection config, which is why this refuses at
- * migrate time rather than letting a deployment discover it.
- */
 final class Timestamps
 {
     private function __construct() {}
@@ -69,7 +56,6 @@ final class Timestamps
         );
     }
 
-    /** Compared as offsets, because UTC, +00:00 and Etc/UTC are one timezone. */
     private static function offset(string $timezone): string
     {
         try {

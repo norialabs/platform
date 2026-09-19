@@ -8,11 +8,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\App;
 use NoriaLabs\Platform\Db\Rebuild;
 
-/**
- * Migrations edited in place leave a long-lived database behind: migrate
- * sees every file already run, and the gap surfaces later as a missing
- * relation. This rebuilds the schema from the files and puts the rows back.
- */
 class RebuildCommand extends Command
 {
     protected $signature = 'noria:rebuild

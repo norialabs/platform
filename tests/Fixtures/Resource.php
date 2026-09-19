@@ -17,7 +17,6 @@ enum Resource: string implements PermissionResource
         return ucfirst($this->value);
     }
 
-    /** Report is read-only, which is what makes supports() worth testing. */
     public function actions(): array
     {
         return match ($this) {

@@ -7,13 +7,6 @@ namespace NoriaLabs\Platform\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
-/**
- * What can be said about the caller of the current request, or nothing at
- * all when the caller is the scheduler.
- *
- * The request id is minted once per request and shared, so a trail row and
- * a log line written seconds apart can be joined afterwards.
- */
 class RequestContext
 {
     private ?string $id = null;

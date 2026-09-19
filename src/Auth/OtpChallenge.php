@@ -10,12 +10,6 @@ use Illuminate\Support\Carbon;
 use NoriaLabs\Platform\Platform;
 
 /**
- * One outstanding sign-in code.
- *
- * The code is hashed, so a dump of this table does not sign anybody in, and
- * attempts are counted on the row rather than in the cache: a rate limit a
- * restart forgets is not a rate limit.
- *
  * @property string $id
  * @property string $identifier
  * @property string $code_hash

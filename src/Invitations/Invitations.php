@@ -15,15 +15,6 @@ use NoriaLabs\Platform\Identity\KeyedHash;
 use NoriaLabs\Platform\Platform;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 
-/**
- * Inviting somebody into a workspace, and letting them in.
- *
- * The package owns the rules - one open invitation per destination, a
- * hashed single-use token, a deadline, and the answer that the person
- * accepting is the person invited. What a role means, and who becomes a
- * member, stay with the product: accept() hands back the invitation and
- * the caller writes the membership.
- */
 class Invitations
 {
     public function __construct(
@@ -45,8 +36,6 @@ class Invitations
     ): array {
         $token = Str::random(64);
 
-        // Reissuing replaces the open one rather than adding a second, so
-        // the newest message is always the one that works.
         $this->open($to)->delete();
 
         $invitation = Platform::invitationModel()::query()->create([
@@ -65,8 +54,6 @@ class Invitations
     }
 
     /**
-     * Whatever is still outstanding for this destination.
-     *
      * @return Builder<Invitation>
      */
     public function open(Destination $to): Builder
@@ -80,13 +67,6 @@ class Invitations
             ->whereNull('revoked_at');
     }
 
-    /**
-     * The invitation a token opens, from outside any workspace.
-     *
-     * Read under the lookup setting rather than a workspace, because
-     * somebody accepting has not joined one yet. The policy admits exactly
-     * the row whose token hash matches and nothing else.
-     */
     public function find(string $token): Invitation
     {
         $hash = $this->hash->of($token);
@@ -111,16 +91,10 @@ class Invitations
         return $invitation;
     }
 
-    /**
-     * Marks the invitation used, inside the workspace it belongs to, and
-     * hands it back for the caller to make a member from.
-     */
     public function accept(string $token, Destination $by, ?string $acceptorId = null): Invitation
     {
         $invitation = $this->find($token);
 
-        // The person accepting has to be the person invited, or a leaked
-        // link is an account in somebody else's workspace.
         if (! hash_equals($invitation->destination_hash, $this->hash->of($by->value))) {
             throw InvitationOutcome::wrongRecipient();
         }
@@ -147,7 +121,6 @@ class Invitations
         return $invitation;
     }
 
-    /** Rows nobody will use again. */
     public function prune(int $days = 30): int
     {
         $deleted = Platform::invitationModel()::query()

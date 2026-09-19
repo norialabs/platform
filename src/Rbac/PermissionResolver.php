@@ -11,14 +11,6 @@ use NoriaLabs\Platform\Contracts\PermissionResource;
 use NoriaLabs\Platform\Contracts\PrincipalResolver;
 use NoriaLabs\Platform\Contracts\RoleRepository;
 
-/**
- * What the caller may do, once. Registered scoped, so a request that checks
- * forty gates reads the roles once rather than forty times.
- *
- * The ceiling is applied after the roles are merged and never before: a role
- * that grants more than the token allows is not an error, it is a role being
- * exercised through a narrower door.
- */
 class PermissionResolver
 {
     /** @var array<string, Permissions> */
@@ -50,7 +42,6 @@ class PermissionResolver
             ->withinCeiling($this->ceiling?->for($user));
     }
 
-    /** Between requests in a long-lived worker, and between tests. */
     public function flush(): void
     {
         $this->resolved = [];

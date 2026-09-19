@@ -9,13 +9,6 @@ use NoriaLabs\Platform\Contracts\PermissionCeiling;
 use NoriaLabs\Platform\Rbac\Catalog;
 use NoriaLabs\Platform\Rbac\Permissions;
 
-/**
- * What the credential on this request allows, whatever the roles behind it
- * say. A token narrows a role and can never widen one.
- *
- * Null when the caller arrived by session rather than by token: a person at
- * a keyboard is bounded by their roles alone.
- */
 class TokenCeiling implements PermissionCeiling
 {
     public function for(Authenticatable $user): ?Permissions

@@ -7,15 +7,6 @@ namespace NoriaLabs\Platform\Identity;
 use Illuminate\Support\Facades\Config;
 use Stringable;
 
-/**
- * Phone numbers in E.164, the only form the identity keys, the messaging
- * providers and the deduplication check ever see.
- *
- * Local, international and imported spellings of one number must normalise
- * to the same string or one customer becomes two accounts. The country is a
- * parameter taken from the workspace; a number already in international
- * form is trusted as given.
- */
 final class Phone implements Stringable
 {
     private function __construct(public readonly string $e164) {}
@@ -29,7 +20,6 @@ final class Phone implements Stringable
             return null;
         }
 
-        // Already international: trust the number, only check it is plausible.
         if (str_starts_with($trimmed, '+')) {
             return self::plausible($digits) ? new self('+'.$digits) : null;
         }
@@ -64,7 +54,6 @@ final class Phone implements Stringable
         return self::diallingCode($country) !== null;
     }
 
-    /** What a redacted prompt or a log line may carry: enough to recognise, not enough to dial. */
     public function masked(): string
     {
         return substr($this->e164, 0, 7).'***'.substr($this->e164, -3);
@@ -83,11 +72,6 @@ final class Phone implements Stringable
         return is_scalar($code) ? (string) $code : null;
     }
 
-    /**
-     * At most fifteen digits including the country code, and the national
-     * part has its own floor: a five digit "number" with a code bolted on
-     * is a typo.
-     */
     private static function plausible(string $digits, ?string $national = null): bool
     {
         if (strlen($digits) < 8 || strlen($digits) > 15) {

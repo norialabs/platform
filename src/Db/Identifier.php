@@ -6,11 +6,6 @@ namespace NoriaLabs\Platform\Db;
 
 use InvalidArgumentException;
 
-/**
- * A database, role or schema name on its way into DDL, which cannot be
- * parameterised. Refused rather than quoted: a name that needs quoting is
- * a name somebody should not be passing here.
- */
 final class Identifier
 {
     private function __construct() {}

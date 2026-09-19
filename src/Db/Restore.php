@@ -9,13 +9,6 @@ use Illuminate\Support\Facades\Config;
 use NoriaLabs\Platform\Contracts\DatabaseMaintainer;
 use RuntimeException;
 
-/**
- * Reads a dump back over a database, optionally one it makes first.
- *
- * Refuses in production unless the caller says so out loud, because the
- * command that restores last night's data over today's is the same command
- * either way.
- */
 class Restore
 {
     public function __construct(
@@ -44,8 +37,6 @@ class Restore
         $dumper = $this->dumpers->make(Connections::driver($settings));
         $created = false;
 
-        // Restoring beside the live database rather than over it: a
-        // rehearsal that proves the dump before anybody bets on it.
         if ($database !== null && $database !== Connections::value($settings, 'database')) {
             if (! $dumper instanceof DatabaseMaintainer) {
                 throw new RuntimeException('This driver cannot restore into a database of its own.');
@@ -150,8 +141,6 @@ class Restore
         }
 
         try {
-            // Chunked rather than read whole: a dump is routinely larger
-            // than the worker's memory limit.
             while (! gzeof($source)) {
                 $chunk = gzread($source, 262_144);
 

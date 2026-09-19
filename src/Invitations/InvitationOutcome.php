@@ -6,10 +6,6 @@ namespace NoriaLabs\Platform\Invitations;
 
 use RuntimeException;
 
-/**
- * Why an invitation could not be acted on. One exception rather than five,
- * because the caller has one thing to say and the reason is for the log.
- */
 class InvitationOutcome extends RuntimeException
 {
     public static function unknown(): self

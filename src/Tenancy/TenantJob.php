@@ -14,20 +14,6 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Config;
 use LogicException;
 
-/**
- * Every queued job belongs to one workspace and runs inside it: a job with no
- * workspace set matches nothing, succeeds, and leaves the work undone.
- *
- * It carries ids and never models, because a serialised model is the row as
- * it was when the job was queued, and a queue ten minutes behind writes back
- * what was true ten minutes ago.
- *
- * Subclasses declare work(), which is resolved through the container so it
- * may type-hint whatever it needs. It is not an abstract method for that
- * reason: a fixed signature would forbid the injection, and a queued job
- * cannot take its dependencies through a constructor because they would be
- * serialised into the payload alongside the ids.
- */
 abstract class TenantJob implements ShouldQueue
 {
     use Dispatchable;
@@ -43,7 +29,6 @@ abstract class TenantJob implements ShouldQueue
     /** @return list<object> */
     public function middleware(): array
     {
-        // Per workspace: one customer must not wait on another customer's file.
         return [
             (new WithoutOverlapping($this->lockKey()))
                 ->expireAfter(Config::integer('noria.tenancy.overlap_expires_after', 3600)),
@@ -64,7 +49,6 @@ abstract class TenantJob implements ShouldQueue
         return Config::string('noria.tenancy.queue', 'default');
     }
 
-    /** What must not run twice at once. The workspace by default; narrow it where that is too wide. */
     protected function lockKey(): string
     {
         return static::class.':'.$this->workspaceId;

@@ -6,11 +6,6 @@ namespace NoriaLabs\Platform\Concerns;
 
 use RuntimeException;
 
-/**
- * A row that cannot be changed or removed once written. The database trigger
- * from Rls::appendOnly() is the real guard; this one turns a mistake into a
- * clear exception instead of a restrict_violation from Postgres.
- */
 trait AppendOnly
 {
     public static function bootAppendOnly(): void

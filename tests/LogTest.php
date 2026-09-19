@@ -14,10 +14,6 @@ describe('redacting a payload', function (): void {
             ->toBe(['password' => '[redacted]']);
     });
 
-    /*
-     * Partial masking leaves a support ticket answerable and also leaves
-     * four characters of a phone number in an aggregator. A product picks.
-     */
     it('leaves enough of a token to answer a support ticket, when asked to', function (): void {
         config(['noria.log.mask' => 'partial']);
 
@@ -30,7 +26,6 @@ describe('redacting a payload', function (): void {
         expect(Redactor::scrub(['pin' => '1234'])['pin'])->toBe('****');
     });
 
-    /* Api-Key, api_key and apikey are one key to everybody except a string comparison. */
     it('treats a key as the same key however it was punctuated', function (): void {
         foreach (['Api-Key', 'api_key', 'apikey', 'API KEY'] as $key) {
             expect(Redactor::sensitive($key))->toBeTrue($key);
@@ -64,7 +59,6 @@ describe('redacting a payload', function (): void {
         expect(Redactor::scrub(['secret' => new stdClass])['secret'])->toBe('[redacted]');
     });
 
-    /* A field sensitive in one product is sensitive everywhere the log ends up. */
     it('adds what a product declares, however the product spelled it', function (): void {
         config(['noria.log.pii_keys' => ['kraPin']]);
 
@@ -83,10 +77,6 @@ describe('writing a log line', function (): void {
         Logger::app('signed in', ['password' => 'hunter2secret']);
     });
 
-    /*
-     * Asking the log manager for a channel that is not defined throws, which
-     * it catches by writing an EMERGENCY entry alongside the real one.
-     */
     it('falls back to the default channel rather than logging the same thing twice', function (): void {
         Log::shouldReceive('log')->once();
         Log::shouldReceive('channel')->never();
@@ -103,11 +93,6 @@ describe('writing a log line', function (): void {
         Logger::auth('otp issued');
     });
 
-    /*
-     * Handed over whole: Monolog renders the trace and every previous
-     * cause, and a line saying what failed without saying where is the one
-     * nobody can act on.
-     */
     it('hands the throwable over whole, trace and causes included', function (): void {
         Log::shouldReceive('log')->once()->withArgs(
             fn (string $level, string $message, array $context): bool => $level === 'error'
@@ -129,11 +114,6 @@ describe('writing a log line', function (): void {
 });
 
 describe('a channel the product defined', function (): void {
-    /*
-     * Hardcoding the channel list would mean a product with its own could
-     * not use this at all, and reaching for Log:: instead is how a payload
-     * gets logged unscrubbed.
-     */
     it('writes to any channel the product named', function (): void {
         config(['logging.channels.transactions' => ['driver' => 'null']]);
 
@@ -169,11 +149,6 @@ describe('a channel the product defined', function (): void {
 });
 
 describe('what must not be touched', function (): void {
-    /*
-     * A provider's own document is evidence. Masking a field inside it
-     * makes the record disagree with what the provider sent, and a
-     * reconciliation against it then fails for the wrong reason.
-     */
     it('keeps a provider payload exactly as it arrived', function (): void {
         $scrubbed = Redactor::scrub([
             'password' => 'hunter2secret',
@@ -190,10 +165,6 @@ describe('what must not be touched', function (): void {
         expect($scrubbed['payload']['body']['secret'])->toBe('keep-me');
     });
 
-    /*
-     * An exemption list a product cannot close is a hole. 'payload' is a
-     * common column name, and one holding user input has to be scrubbable.
-     */
     it('lets a product replace the default rather than only add to it', function (): void {
         config(['noria.log.verbatim_keys' => ['raw_response']]);
 
@@ -212,7 +183,6 @@ describe('what must not be touched', function (): void {
 });
 
 describe('an address in the context', function (): void {
-    /* A token in a query string is a token. */
     it('drops the query string and keeps the path', function (): void {
         expect(Redactor::scrub(['callback_url' => 'https://example.com/hook?token=secret123'])['callback_url'])
             ->toBe('https://example.com/hook');
@@ -238,7 +208,6 @@ describe('ambient context', function (): void {
         Logger::app('a line');
     });
 
-    /* A line joined to a request afterwards is worth far more than one that is not. */
     it('carries what the product says every line should carry', function (): void {
         app()->bind(LogContext::class, StubLogContext::class);
 

@@ -7,13 +7,6 @@ use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Db\Rebuild;
 use NoriaLabs\Platform\Db\Schemas;
 
-/*
- * The whole rebuild cycle takes a superuser, a copy database and a
- * migrate:fresh of the host's own migrations, which is a deployment
- * rehearsal rather than a unit test. What is tested here is every step
- * that can be exercised against one connection: the refusals that stop it
- * starting, the shape read, and the two operations that change a database.
- */
 beforeEach(function (): void {
     if (DB::connection()->getDriverName() !== 'pgsql') {
         $this->markTestSkipped('A rebuild is Postgres only.');
@@ -30,10 +23,6 @@ describe('refusing to start', function (): void {
         app(Rebuild::class)->run('copy_db', false, fn () => null);
     })->throws(RuntimeException::class, 'needs a pgsql connection');
 
-    /*
-     * A non-superuser cannot disable referential triggers for the reload,
-     * and its dump comes back empty under row level security.
-     */
     it('refuses a role that cannot carry the reload through', function (): void {
         app(Rebuild::class)->run('copy_db', false, fn () => null);
     })->throws(RuntimeException::class, 'not a superuser');
@@ -128,12 +117,6 @@ describe('trimming a copy to the rebuilt shape', function (): void {
 });
 
 describe('orphaned routines', function (): void {
-    /*
-     * migrate:fresh drops tables, views and types and leaves routines
-     * standing. One owned by a role the migrations no longer run as cannot
-     * be recreated, and one deleted from the migrations would otherwise
-     * survive every rebuild forever.
-     */
     it('drops a function the migrations would otherwise never replace', function (): void {
         DB::unprepared('create or replace function leftover() returns int as $$ begin return 1; end; $$ language plpgsql');
 

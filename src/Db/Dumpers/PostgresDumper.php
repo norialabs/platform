@@ -44,9 +44,6 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
     /** @param array<string, mixed> $connection */
     public function restore(array $connection, string $source): void
     {
-        // ON_ERROR_STOP, because psql's default is to report a failed
-        // statement and carry on, leaving a database that restored
-        // "successfully" and is missing a table.
         $this->run($connection, [
             'psql',
             ...$this->target($connection),
@@ -57,10 +54,6 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
     }
 
     /**
-     * A role that cannot bypass row level security dumps no rows at all,
-     * and the file it produces looks entirely normal until somebody
-     * restores it. Refused here rather than discovered then.
-     *
      * @param  array<string, mixed>  $connection
      */
     public function preflight(array $connection): void

@@ -4,14 +4,6 @@ declare(strict_types=1);
 
 namespace NoriaLabs\Platform\Auth;
 
-/**
- * What a provider told us about the person who just consented.
- *
- * Socialite's own user object stops at the edge of the application: the
- * linking rules turn on whether the provider says the email is verified,
- * and that flag lives in the raw payload under a different name for every
- * provider.
- */
 final class ProviderProfile
 {
     /** @param array<string, mixed> $raw */
@@ -26,10 +18,6 @@ final class ProviderProfile
     ) {}
 
     /**
-     * Built from Socialite's user without depending on the package: a host
-     * passes what it got, and products that do not use Socialite at all do
-     * not gain a dependency on it.
-     *
      * @param  array<array-key, mixed>  $raw
      */
     public static function make(
@@ -69,10 +57,6 @@ final class ProviderProfile
     }
 
     /**
-     * Google sends email_verified on the id token and verified_email on the
-     * older userinfo shape. Absent means not verified: a provider that does
-     * not say has not said yes.
-     *
      * @param  array<string, mixed>  $raw
      */
     private static function verifiedIn(array $raw): bool
@@ -81,10 +65,6 @@ final class ProviderProfile
     }
 
     /**
-     * A debugging aid, not a credential store: no provider access or refresh
-     * token is kept. A feature that needs to call a provider API gets an
-     * encrypted column of its own.
-     *
      * @param  array<string, mixed>  $raw
      * @return array<string, mixed>
      */

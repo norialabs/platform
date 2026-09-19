@@ -6,17 +6,6 @@ namespace NoriaLabs\Platform\Log;
 
 use Illuminate\Support\Facades\Config;
 
-/**
- * Masks what should never reach a log aggregator.
- *
- * Keys are normalised before matching - underscores, hyphens and spaces
- * stripped, then lowercased - so Api-Key, api_key and apikey are one key.
- * Suffixes catch the prefixed variants an exact list misses:
- * merchant_api_key normalises to merchantapikey and ends with apikey.
- *
- * Masked rather than dropped, because a support ticket that says the token
- * ended 9f is answerable and one that says [redacted] is not.
- */
 final class Redactor
 {
     /** @var list<string> */
@@ -64,9 +53,6 @@ final class Redactor
                 continue;
             }
 
-            // A provider's own document is evidence. Masking a field inside
-            // it makes the record disagree with what the provider sent, and
-            // a reconciliation against it then fails for the wrong reason.
             if ($inside) {
                 continue;
             }
@@ -77,8 +63,6 @@ final class Redactor
                 continue;
             }
 
-            // A token in a query string is a token. Keeping the path leaves
-            // the line useful without carrying the credential.
             if (self::addressed($name) && is_scalar($value)) {
                 $payload[$key] = self::withoutQuery((string) $value);
             }
@@ -87,13 +71,11 @@ final class Redactor
         return $payload;
     }
 
-    /** Whether a key names a subtree kept exactly as it arrived. */
     public static function verbatim(string $key): bool
     {
         return in_array(self::normalise($key), self::listed('verbatim_keys', ['payload']), true);
     }
 
-    /** Whether a key holds something with a query string worth dropping. */
     private static function addressed(string $key): bool
     {
         foreach (self::listed('address_suffixes', ['url', 'uri', 'endpoint', 'callback']) as $suffix) {
@@ -133,12 +115,6 @@ final class Redactor
         return false;
     }
 
-    /**
-     * Blanked by default. Partial masking leaves a support ticket
-     * answerable - the token ended 9f - and also leaves four characters of
-     * somebody's phone number in an aggregator, which is a trade a product
-     * should make deliberately rather than inherit.
-     */
     public static function mask(mixed $value): mixed
     {
         if (is_array($value)) {
@@ -160,11 +136,6 @@ final class Redactor
     }
 
     /**
-     * A list the product owns outright, defaults used only when it names
-     * none. These decide what is *not* scrubbed, and an exemption a
-     * product cannot close is a hole: 'payload' is a common column name,
-     * and a product holding user input under it must be able to say so.
-     *
      * @param  list<string>  $defaults
      * @return list<string>
      */
@@ -177,13 +148,6 @@ final class Redactor
     }
 
     /**
-     * A product adds its own without losing the defaults: a field that is
-     * sensitive in one product is sensitive everywhere the log ends up.
-     *
-     * What the product declares is normalised too, so kra_pin, kraPin and
-     * krapin all work. Matching a raw config entry against a normalised key
-     * would silently never fire.
-     *
      * @param  list<string>  $defaults
      * @return list<string>
      */

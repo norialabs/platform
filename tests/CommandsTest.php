@@ -16,10 +16,6 @@ function address(): Destination
 }
 
 describe('the scheduler healthcheck', function (): void {
-    /*
-     * A scheduler running but never firing looks identical to a healthy
-     * one from outside, which is the whole reason for the heartbeat.
-     */
     it('fails while the scheduler has never checked in', function (): void {
         $this->artisan('noria:scheduler-healthy')->assertFailed();
     });
@@ -73,10 +69,6 @@ describe('the tenancy check', function (): void {
         }
     });
 
-    /*
-     * A deployment check, not a request check. It passes here because the
-     * suite deliberately runs as a role that cannot bypass a policy.
-     */
     it('passes on a database whose role cannot step around a policy', function (): void {
         $this->artisan('noria:tenancy-check')->assertSuccessful();
     });
@@ -130,10 +122,6 @@ describe('the static error pages', function (): void {
         }
     });
 
-    /*
-     * A 502 means the application is not answering, so the page for it
-     * cannot be rendered by the application when it is needed.
-     */
     it('writes a file the edge can serve without the application', function (): void {
         app('view')->addNamespace('errors', __DIR__.'/Fixtures/views');
         config(['noria.errors.view' => 'errors::']);
@@ -171,11 +159,6 @@ describe('the deployment check and the clock', function (): void {
         }
     });
 
-    /*
-     * Checked here as well as at migrate time: a connection added later,
-     * or a config edit, would otherwise go unnoticed until the next
-     * migration, by which point the rows are already wrong.
-     */
     it('fails when the connection would store every moment at the wrong instant', function (): void {
         DB::statement("set time zone 'Africa/Nairobi'");
 

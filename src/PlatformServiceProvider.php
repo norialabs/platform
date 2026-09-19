@@ -39,15 +39,12 @@ use NoriaLabs\Platform\Tenancy\Tenancy;
 
 class PlatformServiceProvider extends ServiceProvider
 {
-    /** The gate every product authorises through. */
     public const GATE = 'workspace-permission';
 
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/noria.php', 'noria');
 
-        // Scoped, not singleton: a long-lived worker serves many workspaces,
-        // and a connection that remembers the last one is the whole problem.
         $this->app->scoped(Tenancy::class);
         $this->app->scoped(PermissionResolver::class, fn (Application $app): PermissionResolver => new PermissionResolver(
             $app->make(PrincipalResolver::class),
@@ -97,9 +94,6 @@ class PlatformServiceProvider extends ServiceProvider
             ], 'noria-migrations');
         }
 
-        // Loaded from the package unless the host published them. Doing both
-        // creates every table twice, which fails on the second CREATE and
-        // leaves a half-migrated database behind.
         if (Config::boolean('noria.load_migrations', true)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
@@ -107,17 +101,6 @@ class PlatformServiceProvider extends ServiceProvider
         $this->registerGate();
     }
 
-    /**
-     * One gate for the whole application: the catalogue is the product's
-     * enums, the grant is the document on its roles, and this is where the
-     * two meet.
-     *
-     *     Gate::authorize(PlatformServiceProvider::GATE, [Resource::Deal, Action::Update]);
-     *
-     * Registered only when the host has bound the two contracts it needs. A
-     * product that has not adopted RBAC yet should get its own failure, not
-     * one from inside this package.
-     */
     private function registerGate(): void
     {
         if (! $this->app->bound(PrincipalResolver::class) || ! $this->app->bound(RoleRepository::class)) {

@@ -11,16 +11,6 @@ use NoriaLabs\Platform\Concerns\BelongsToWorkspace;
 use NoriaLabs\Platform\Platform;
 
 /**
- * An outstanding invitation to join a workspace.
- *
- * The token is stored hashed and the destination with it: a dump of this
- * table lets nobody accept anything, and tells nobody who was invited. The
- *
- * hint is the part a screen can show back - "j****@example.com".
- *
- * Open is three conditions rather than a status column, because a status
- * has to be written to expire and these rows expire on their own.
- *
  * @property string $id
  * @property string|null $workspace_id
  * @property string $channel

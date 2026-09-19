@@ -26,8 +26,6 @@ class RestoreCommand extends Command
         $key = is_string($key) && $key !== '' ? $key : null;
         $into = $this->text('database');
 
-        // Resolved here rather than inside the restore, so an empty disk
-        // is a sentence on the console instead of a stack trace.
         if ($key === null) {
             try {
                 $key = $backups->latestKey($this->text('disk'));

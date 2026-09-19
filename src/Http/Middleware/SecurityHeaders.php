@@ -11,14 +11,6 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * The headers every response carries. Directives are config, because a
- * product that embeds a widget or loads a third-party script needs to relax
- * one of them without dropping the whole middleware.
- *
- * Set rather than replaced: a route that has already decided its own policy
- * knows something this does not.
- */
 class SecurityHeaders
 {
     /** @param  Closure(Request): Response  $next */
@@ -63,11 +55,6 @@ class SecurityHeaders
         return $headers;
     }
 
-    /**
-     * An API answers with data, so it needs no origin at all - not even
-     * its own. A policy wide enough for the pages is far wider than the
-     * routes that only ever return JSON.
-     */
     private function api(Request $request): bool
     {
         $paths = Config::array('noria.http.security_headers.api.paths', []);
@@ -82,10 +69,6 @@ class SecurityHeaders
     }
 
     /**
-     * The dev server serves assets from its own origin while it is hot, so
-     * a policy naming only 'self' blocks every script the page needs. Only
-     * in local, and only while the hot file exists.
-     *
      * @param  array<mixed>  $directives
      * @return array<mixed>
      */
@@ -129,10 +112,6 @@ class SecurityHeaders
         return $hot === '' ? null : rtrim($hot, '/');
     }
 
-    /**
-     * A PDF the browser renders in a frame cannot be served with
-     * frame-ancestors none, so that one document type relaxes to same origin.
-     */
     private function framed(Response $response): bool
     {
         return str_contains((string) $response->headers->get('Content-Type'), 'application/pdf');

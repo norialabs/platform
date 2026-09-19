@@ -8,14 +8,6 @@ use NoriaLabs\Platform\Contracts\PermissionAction;
 use NoriaLabs\Platform\Contracts\PermissionResource;
 use NoriaLabs\Platform\Rbac\Catalog;
 
-/**
- * The vocabulary a personal access token is written in.
- *
- * Exactly one workspace:{uuid}, because the workspace is read from the
- * credential rather than from a header. The rest are {resource}:{action}
- * from the catalogue the gates check, or '*'. A token narrows a role and
- * can never widen one.
- */
 final class TokenAbilities
 {
     public const ALL = '*';
@@ -27,10 +19,6 @@ final class TokenAbilities
     private function __construct() {}
 
     /**
-     * The one workspace this token is for. Null when there is none or more
-     * than one: a token naming two workspaces is as unscoped as a token
-     * naming none.
-     *
      * @param  array<array-key, mixed>  $abilities
      */
     public static function workspaceIn(array $abilities): ?string
@@ -58,7 +46,6 @@ final class TokenAbilities
         return $resource->value.':'.$action->value;
     }
 
-    /** '*', a workspace scope, or a pair the catalogue actually supports. */
     public static function isValid(string $ability): bool
     {
         if ($ability === self::ALL) {
