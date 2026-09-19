@@ -34,7 +34,7 @@ class AuditRecorder
         $actorId = Auth::id();
 
         return Platform::auditLogModel()::query()->create([
-            'workspace_id' => $this->tenancy->id(),
+            Config::string('platform.tenancy.column', 'workspace_id') => $this->tenancy->id(),
             'actor_id' => $actorId === null ? null : (string) $actorId,
             'actor_type' => $actorId === null ? 'system' : 'user',
             'action' => $action,

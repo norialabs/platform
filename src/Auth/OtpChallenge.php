@@ -20,6 +20,7 @@ use NoriaLabs\Platform\Platform;
  * @property string $identifier
  * @property string $code_hash
  * @property int $attempts
+ * @property Carbon|null $created_at
  * @property Carbon $expires_at
  * @property Carbon|null $consumed_at
  */
@@ -44,6 +45,7 @@ class OtpChallenge extends Model
     {
         return [
             'attempts' => 'integer',
+            'created_at' => 'datetime',
             'expires_at' => 'datetime',
             'consumed_at' => 'datetime',
         ];

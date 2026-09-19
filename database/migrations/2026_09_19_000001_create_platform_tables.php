@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Platform;
 
@@ -22,10 +23,18 @@ return new class extends Migration
          * read before anybody knows which workspace they are signing in to.
          * They are in platform.tenancy.unscoped_tables for the same reason.
          */
-        Schema::create(Platform::table('audit_logs'), function (Blueprint $table): void {
+        $tenantColumn = Config::string('platform.tenancy.column', 'workspace_id');
+
+        Schema::create(Platform::table('audit_logs'), function (Blueprint $table) use ($tenantColumn): void {
             $table->uuid('id')->primary();
-            $table->uuid('workspace_id')->nullable()->index();
-            $table->uuid('actor_id')->nullable()->index();
+            $table->uuid($tenantColumn)->nullable()->index();
+
+            /*
+             * A string and not a uuid: the package cannot know the host's
+             * user model, and a product still keyed on bigint would have
+             * every write refused with "invalid input syntax for type uuid".
+             */
+            $table->string('actor_id', 64)->nullable()->index();
             $table->string('actor_type', 32)->default('user');
             $table->string('action', 128)->index();
             $table->string('target_type', 256)->nullable();
@@ -38,7 +47,7 @@ return new class extends Migration
             $table->timestamp('created_at')->nullable();
 
             $table->index(['target_type', 'target_id']);
-            $table->index(['workspace_id', 'created_at']);
+            $table->index([$tenantColumn, 'created_at']);
         });
 
         Schema::create(Platform::table('otp_challenges'), function (Blueprint $table): void {

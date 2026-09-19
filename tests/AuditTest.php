@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use NoriaLabs\Platform\Audit\AuditLog;
 use NoriaLabs\Platform\Audit\AuditRecorder;
 use NoriaLabs\Platform\Audit\RequestContext;
@@ -79,4 +80,17 @@ it('trims a user agent long enough to overflow its column', function (): void {
     $request->headers->set('User-Agent', str_repeat('x', 900));
 
     expect(mb_strlen((string) (new RequestContext($request))->userAgent()))->toBe(512);
+});
+
+/*
+ * The package cannot know the host's user model. Keyed as a uuid, a product
+ * still on bigint users had every write refused with "invalid input syntax
+ * for type uuid".
+ */
+it('records an actor from a product whose users are not keyed on uuid', function (): void {
+    Auth::shouldReceive('id')->andReturn(42);
+
+    app(AuditRecorder::class)->record('invoice.voided');
+
+    expect(AuditLog::query()->sole()->actor_id)->toBe('42');
 });

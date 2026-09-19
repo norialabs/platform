@@ -13,9 +13,12 @@ use Illuminate\Support\ServiceProvider;
 use NoriaLabs\Platform\Audit\AuditRecorder;
 use NoriaLabs\Platform\Audit\RequestContext;
 use NoriaLabs\Platform\Auth\Otp;
+use NoriaLabs\Platform\Auth\SocialState;
 use NoriaLabs\Platform\Console\BackupCommand;
 use NoriaLabs\Platform\Console\PruneOtpCommand;
 use NoriaLabs\Platform\Console\RestoreCommand;
+use NoriaLabs\Platform\Console\SchedulerHealthyCommand;
+use NoriaLabs\Platform\Console\SchedulerHeartbeatCommand;
 use NoriaLabs\Platform\Console\TenancyCheckCommand;
 use NoriaLabs\Platform\Contracts\PermissionAction;
 use NoriaLabs\Platform\Contracts\PermissionCeiling;
@@ -52,6 +55,7 @@ class PlatformServiceProvider extends ServiceProvider
 
         $this->app->scoped(AuditRecorder::class);
         $this->app->singleton(Otp::class);
+        $this->app->singleton(SocialState::class);
         $this->app->singleton(DumperFactory::class);
         $this->app->singleton(Backup::class);
         $this->app->singleton(Restore::class);
@@ -65,6 +69,8 @@ class PlatformServiceProvider extends ServiceProvider
                 RestoreCommand::class,
                 TenancyCheckCommand::class,
                 PruneOtpCommand::class,
+                SchedulerHealthyCommand::class,
+                SchedulerHeartbeatCommand::class,
             ]);
 
             $this->publishes([

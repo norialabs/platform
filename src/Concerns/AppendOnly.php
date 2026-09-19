@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NoriaLabs\Platform\Audit;
+namespace NoriaLabs\Platform\Concerns;
 
 use RuntimeException;
 

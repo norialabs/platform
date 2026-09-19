@@ -53,6 +53,10 @@ not know about is a setting that outlives the request that set it.
 The host implements `WorkspaceResolver` and the middleware does the rest. `terminate()` is not
 optional.
 
+Models use `BelongsToWorkspace`, which stamps the workspace as a row is created. Without it every
+insert has to name its own, and the one that forgets is refused by the policy's `with check` - or,
+on a nullable column, writes an orphan nobody can read again.
+
 `php artisan platform:tenancy-check` reports every way one workspace could read another: a role
 that is superuser or holds BYPASSRLS, a tenant table with no policy, a policy the table owner is
 still exempt from. Run it at boot, on a clock, and in CI.
@@ -83,6 +87,16 @@ The host binds `PrincipalResolver` and `RoleRepository`, and optionally `Permiss
 gate is registered only when the first two are bound, so a product that has not adopted RBAC gets
 its own failure rather than one from inside this package.
 
+### Log
+
+`Logger::app/auth/backup/exception` with the context scrubbed first. Keys are normalised before
+matching, so `Api-Key`, `api_key` and `apikey` are one key, and suffixes catch the prefixed
+variants an exact list misses. A product adds its own through `platform.log.*`, however it spells
+them, and never loses the defaults.
+
+Masked rather than dropped: a support ticket saying the token ended `9f` is answerable, one saying
+`[redacted]` is not.
+
 ### Audit
 
 Append-only, outside tenancy, and the trail outlives the workspace it describes. One
@@ -90,14 +104,27 @@ Append-only, outside tenancy, and the trail outlives the workspace it describes.
 
 ### Auth
 
-Issuing and checking a one-time code, and nothing else: no user lookup, no mail, no session,
-because those answers differ per product and this does not. Codes are hashed, attempts are counted
-on the row rather than in the cache, and issuing cancels whatever was outstanding so the newest
-mail is always the one that works.
+Issuing and checking a one-time code, and the mechanics of a provider round trip. No user lookup,
+no mail, no session, no routes: those differ per product and these do not.
+
+Codes are hashed, attempts are counted on the row rather than in the cache, issuing cancels
+whatever was outstanding so the newest mail is always the one that works, and a resend inside
+`platform.auth.otp.throttle` throws `OtpThrottled` carrying the wait.
+
+`SocialState` mints and claims the nonce that binds a provider round trip to the browser that
+started it - stateless Socialite sends no state parameter at all - and records who began it,
+because that is the only moment the intent is known: begun by nobody is a sign-in, begun by
+somebody is a link. Single use, keyed by hash. `ProviderProfile` normalises what came back and
+keeps no provider token; `email_verified` and `verified_email` are the same answer and absent
+means no.
 
 ### Db
 
 `platform:backup`, `platform:restore`, and a dumper per driver. `register()` takes a product's own.
+
+`platform:scheduler-heartbeat` on the schedule and `platform:scheduler-healthy` as the container
+healthcheck: a scheduler that is running but never firing looks identical to a healthy one from
+outside.
 
 ### Http
 
@@ -131,7 +158,14 @@ export, padded and duplicated headers - and yields rows numbered the way the spr
 | CSP directives | `platform.http.security_headers.directives` |
 | Currency and minor units | `platform.money.*` |
 | Backup disk, retention | `platform.db.*` |
-| OTP length, TTL, attempts | `platform.auth.otp.*` |
+| OTP length, TTL, attempts, resend wait | `platform.auth.otp.*` |
+| Extra redaction keys | `platform.log.*` |
+| Trusted proxies | `platform.http.trusted_proxies` + the `TrustProxies` middleware |
+| Scheduler heartbeat window | `platform.scheduler.heartbeat_ttl` |
+
+`actor_id` on the trail is a string, not a uuid: the package cannot know the host's user model,
+and a product still keyed on bigint would have every write refused. The tenant column is read from
+`platform.tenancy.column` in the package's own migration too, so renaming it renames it everywhere.
 
 Turn a module off with `platform.tenancy.enabled` or `platform.audit.enabled`. Publish and edit the
 migrations with `--tag=platform-migrations`, then set `PLATFORM_LOAD_MIGRATIONS=false` or every

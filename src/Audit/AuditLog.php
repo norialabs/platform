@@ -6,6 +6,7 @@ namespace NoriaLabs\Platform\Audit;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use NoriaLabs\Platform\Concerns\AppendOnly;
 use NoriaLabs\Platform\Platform;
 
 /**

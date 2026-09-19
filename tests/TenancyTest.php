@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Http\Middleware\SetWorkspaceContext;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 use NoriaLabs\Platform\Tenancy\TenancyMissing;
 use NoriaLabs\Platform\Tests\Fixtures\StubWorkspaces;
+use NoriaLabs\Platform\Tests\Fixtures\Widget;
 use Symfony\Component\HttpFoundation\Response;
 
 function postgresOnly(): void
@@ -164,5 +166,56 @@ describe('a product with no tenants', function (): void {
         app(Tenancy::class)->set('01a0b000-0000-7000-8000-00000000000a');
 
         expect(guc('app.workspace_id'))->toBe('');
+    });
+});
+
+describe('stamping a row', function (): void {
+    beforeEach(function (): void {
+        Schema::create('widgets', function ($table): void {
+            $table->uuid('id')->primary();
+            $table->uuid('workspace_id')->nullable();
+            $table->string('name', 64);
+        });
+    });
+
+    /*
+     * Without this every insert has to name its own workspace, and the one
+     * that forgets is refused by the policy - or writes an orphan nobody
+     * can read again.
+     */
+    it('puts the current workspace on a row as it is written', function (): void {
+        app(Tenancy::class)->run('01a0b000-0000-7000-8000-00000000000a', function (): void {
+            Widget::query()->create(['name' => 'ours']);
+        });
+
+        expect(DB::table('widgets')->value('workspace_id'))->toBe('01a0b000-0000-7000-8000-00000000000a');
+    });
+
+    it('leaves a workspace the caller named alone', function (): void {
+        app(Tenancy::class)->run('01a0b000-0000-7000-8000-00000000000a', function (): void {
+            Widget::query()->create(['name' => 'theirs', 'workspace_id' => '01a0b000-0000-7000-8000-00000000000b']);
+        });
+
+        expect(DB::table('widgets')->value('workspace_id'))->toBe('01a0b000-0000-7000-8000-00000000000b');
+    });
+
+    it('stamps the column the product renamed it to', function (): void {
+        Schema::drop('widgets');
+        Schema::create('widgets', function ($table): void {
+            $table->uuid('id')->primary();
+            $table->uuid('tenant_id')->nullable();
+            $table->string('name', 64);
+        });
+
+        config([
+            'platform.tenancy.column' => 'tenant_id',
+            'platform.tenancy.gucs' => ['app.workspace_id'],
+        ]);
+
+        app(Tenancy::class)->run('01a0b000-0000-7000-8000-00000000000a', function (): void {
+            Widget::query()->create(['name' => 'ours']);
+        });
+
+        expect(DB::table('widgets')->value('tenant_id'))->toBe('01a0b000-0000-7000-8000-00000000000a');
     });
 });

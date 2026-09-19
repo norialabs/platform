@@ -21,9 +21,52 @@ use Illuminate\Support\Str;
  */
 class Otp
 {
-    /** @return string the plain code, which exists only in this return value */
+    /**
+     * How long until this identifier may ask for another code, or null when
+     * it may ask now. Checked on the row rather than in the cache, so a
+     * restart does not hand out a fresh allowance.
+     */
+    public function secondsUntilNextIssue(string $identifier): ?int
+    {
+        $throttle = Config::integer('platform.auth.otp.throttle', 60);
+
+        if ($throttle <= 0) {
+            return null;
+        }
+
+        $last = OtpChallenge::query()
+            ->where('identifier', $this->normalise($identifier))
+            ->latest('created_at')
+            ->first();
+
+        if ($last === null) {
+            return null;
+        }
+
+        $issuedAt = $last->created_at;
+
+        if ($issuedAt === null) {
+            return null;
+        }
+
+        $ready = $issuedAt->addSeconds($throttle);
+
+        return $ready->isFuture() ? (int) ceil(now()->diffInSeconds($ready, absolute: true)) : null;
+    }
+
+    /**
+     * @return string the plain code, which exists only in this return value
+     *
+     * @throws OtpThrottled when one was issued for this identifier too recently
+     */
     public function issue(string $identifier): string
     {
+        $wait = $this->secondsUntilNextIssue($identifier);
+
+        if ($wait !== null) {
+            throw new OtpThrottled("Another code may be requested in {$wait} seconds.", $wait);
+        }
+
         $code = $this->code();
 
         $this->pending($identifier)->delete();

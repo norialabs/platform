@@ -5,4 +5,8 @@ parameters:
     level: max
     paths:
         - src
+        # The fixtures, not the specs: they are the only place a trait meant
+        # for a host's models is actually applied to one, and phpstan skips a
+        # trait it never sees used.
+        - tests/Fixtures
     treatPhpDocTypesAsCertain: false

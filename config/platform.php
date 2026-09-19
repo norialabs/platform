@@ -115,6 +115,25 @@ return [
         'trusted_proxies' => env('PLATFORM_TRUSTED_PROXIES'),
     ],
 
+    'log' => [
+        /*
+         * Added to the package defaults, never replacing them: a field that
+         * is sensitive in one product is sensitive everywhere the log ends
+         * up. Normalised the same way - api_key, Api-Key and apikey are one.
+         */
+        'credential_keys' => [],
+        'credential_suffixes' => [],
+        'pii_keys' => [],
+    ],
+
+    'scheduler' => [
+        /*
+         * Longer than the minute the heartbeat is scheduled at, so one slow
+         * run is not an outage, short enough that a stopped scheduler is.
+         */
+        'heartbeat_ttl' => (int) env('PLATFORM_HEARTBEAT_TTL', 300),
+    ],
+
     'money' => [
         'currency' => env('PLATFORM_CURRENCY', 'KES'),
         'minor_units' => (int) env('PLATFORM_CURRENCY_MINOR_UNITS', 2),
@@ -133,6 +152,10 @@ return [
     ],
 
     'auth' => [
+        'social' => [
+            'state_ttl' => (int) env('PLATFORM_SOCIAL_STATE_TTL', 10),
+        ],
+
         'otp' => [
             'length' => (int) env('PLATFORM_OTP_LENGTH', 6),
             'ttl' => (int) env('PLATFORM_OTP_TTL', 10),
