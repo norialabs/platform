@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace NoriaLabs\Platform\Console;
 
 use Illuminate\Console\Command;
+use NoriaLabs\Platform\Db\Backup;
 use NoriaLabs\Platform\Db\Restore;
+use RuntimeException;
 
 class RestoreCommand extends Command
 {
@@ -18,11 +20,23 @@ class RestoreCommand extends Command
 
     protected $description = 'Read a backup back over a database, or beside it';
 
-    public function handle(Restore $restore): int
+    public function handle(Backup $backups, Restore $restore): int
     {
         $key = $this->argument('key');
         $key = is_string($key) && $key !== '' ? $key : null;
         $into = $this->text('database');
+
+        // Resolved here rather than inside the restore, so an empty disk
+        // is a sentence on the console instead of a stack trace.
+        if ($key === null) {
+            try {
+                $key = $backups->latestKey($this->text('disk'));
+            } catch (RuntimeException $e) {
+                $this->components->error($e->getMessage());
+
+                return self::FAILURE;
+            }
+        }
 
         if (! $this->option('force') && ! $this->confirm('Restore over '.($into ?? 'the current database').'?', false)) {
             return self::FAILURE;

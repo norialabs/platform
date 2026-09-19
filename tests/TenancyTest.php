@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Http\Middleware\SetWorkspaceContext;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 use NoriaLabs\Platform\Tenancy\TenancyMissing;
+use NoriaLabs\Platform\Tests\Fixtures\CountWidgets;
 use NoriaLabs\Platform\Tests\Fixtures\StubWorkspaces;
 use NoriaLabs\Platform\Tests\Fixtures\Widget;
 use Symfony\Component\HttpFoundation\Response;
@@ -217,5 +218,40 @@ describe('stamping a row', function (): void {
         });
 
         expect(DB::table('widgets')->value('tenant_id'))->toBe('01a0b000-0000-7000-8000-00000000000a');
+    });
+});
+
+describe('a queued job', function (): void {
+    beforeEach(fn () => CountWidgets::$ranInside = null);
+
+    /*
+     * A job with no workspace set matches nothing, succeeds, and leaves
+     * the work undone. It carries an id and never a model, because a
+     * serialised model is the row as it was when the job was queued.
+     */
+    it('runs inside the workspace it was queued for', function (): void {
+        app()->call([new CountWidgets('01a0b000-0000-7000-8000-00000000000a'), 'handle']);
+
+        expect(CountWidgets::$ranInside)->toBe('01a0b000-0000-7000-8000-00000000000a');
+    });
+
+    it('leaves the connection as it found it', function (): void {
+        app()->call([new CountWidgets('01a0b000-0000-7000-8000-00000000000a'), 'handle']);
+
+        expect(app(Tenancy::class)->id())->toBeNull();
+    });
+
+    it('takes the lane the product configured', function (): void {
+        config(['platform.tenancy.queue' => 'slow']);
+
+        expect((new CountWidgets('01a0b000-0000-7000-8000-00000000000a'))->queue)->toBe('slow');
+    });
+
+    /* One customer must not wait on another customer's file. */
+    it('holds a lock per workspace rather than per job class', function (): void {
+        $first = new CountWidgets('01a0b000-0000-7000-8000-00000000000a');
+        $second = new CountWidgets('01a0b000-0000-7000-8000-00000000000b');
+
+        expect($first->middleware()[0]->key)->not->toBe($second->middleware()[0]->key);
     });
 });

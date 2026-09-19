@@ -57,11 +57,12 @@ return [
          * where the column is a tag rather than an owner. Adding to this list
          * is a decision, which is why it is config rather than a guess made
          * by whoever is reading the failure.
+         *
+         * The package's own three are excluded whatever this says, so a
+         * host renaming one does not have to declare it here as well.
          */
         'unscoped_tables' => [
-            'audit_logs',
             'auth_events',
-            'otp_challenges',
             'personal_access_tokens',
         ],
 

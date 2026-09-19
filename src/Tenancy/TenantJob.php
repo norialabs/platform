@@ -12,6 +12,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Config;
+use LogicException;
 
 /**
  * Every queued job belongs to one workspace and runs inside it: a job with no
@@ -20,6 +21,12 @@ use Illuminate\Support\Facades\Config;
  * It carries ids and never models, because a serialised model is the row as
  * it was when the job was queued, and a queue ten minutes behind writes back
  * what was true ten minutes ago.
+ *
+ * Subclasses declare work(), which is resolved through the container so it
+ * may type-hint whatever it needs. It is not an abstract method for that
+ * reason: a fixed signature would forbid the injection, and a queued job
+ * cannot take its dependencies through a constructor because they would be
+ * serialised into the payload alongside the ids.
  */
 abstract class TenantJob implements ShouldQueue
 {
@@ -45,10 +52,12 @@ abstract class TenantJob implements ShouldQueue
 
     public function handle(Tenancy $tenancy, Container $container): void
     {
+        if (! method_exists($this, 'work')) {
+            throw new LogicException(static::class.' must declare work().');
+        }
+
         $tenancy->run($this->workspaceId, fn () => $container->call([$this, 'work']));
     }
-
-    abstract public function work(): void;
 
     protected function lane(): string
     {

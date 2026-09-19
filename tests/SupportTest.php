@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Csv\Reader;
 use NoriaLabs\Platform\Csv\Writer;
+use NoriaLabs\Platform\Http\Middleware\TrustProxies;
 use NoriaLabs\Platform\Http\TrustedProxies;
 use NoriaLabs\Platform\Money\Money;
+use NoriaLabs\Platform\Tests\Fixtures\Priced;
 
 function csvFile(string $contents): string
 {
@@ -161,5 +165,96 @@ describe('trusting a proxy', function (): void {
 
     it('trusts every hop only when told to in so many words', function (): void {
         expect(TrustedProxies::from('*'))->toBe('*');
+    });
+});
+
+describe('money on a model', function (): void {
+    beforeEach(function (): void {
+        Schema::create('priced', function ($table): void {
+            $table->uuid('id')->primary();
+            $table->bigInteger('total')->nullable();
+            $table->string('currency', 8)->nullable();
+        });
+    });
+
+    it('reads an integer column back as an amount', function (): void {
+        Priced::query()->create(['id' => '01a0b000-0000-7000-8000-000000000001', 'total' => 1_250, 'currency' => 'KES']);
+
+        $amount = Priced::query()->sole()->total;
+
+        expect($amount)->toBeInstanceOf(Money::class);
+        expect($amount->minor)->toBe(1_250);
+        expect($amount->currency)->toBe('KES');
+    });
+
+    it('writes an amount back as the integer it is', function (): void {
+        Priced::query()->create([
+            'id' => '01a0b000-0000-7000-8000-000000000002',
+            'total' => Money::of(990, 'KES'),
+            'currency' => 'KES',
+        ]);
+
+        expect(Priced::query()->sole()->getRawOriginal('total'))->toBe(990);
+    });
+
+    /* A fixed fallback would mislabel every amount belonging to elsewhere. */
+    it('takes the currency from the row beside it', function (): void {
+        Priced::query()->create(['id' => '01a0b000-0000-7000-8000-000000000003', 'total' => 500, 'currency' => 'UGX']);
+
+        expect(Priced::query()->sole()->total->currency)->toBe('UGX');
+    });
+
+    it('falls back to the configured currency only when the row says nothing', function (): void {
+        config(['platform.money.currency' => 'TZS']);
+
+        Priced::query()->create(['id' => '01a0b000-0000-7000-8000-000000000004', 'total' => 500]);
+
+        expect(Priced::query()->sole()->total->currency)->toBe('TZS');
+    });
+
+    it('leaves an empty column empty rather than calling it zero', function (): void {
+        Priced::query()->create(['id' => '01a0b000-0000-7000-8000-000000000005']);
+
+        expect(Priced::query()->sole()->total)->toBeNull();
+    });
+});
+
+describe('trusting a proxy in the middleware', function (): void {
+    function throughProxy(): string
+    {
+        $request = Request::create('/', server: ['REMOTE_ADDR' => '10.0.0.1']);
+        $request->headers->set('X-Forwarded-For', '203.0.113.9');
+
+        (new TrustProxies)->handle($request, fn () => new Response);
+
+        return (string) $request->ip();
+    }
+
+    /*
+     * Without this every per-address limit counts the whole platform as
+     * one caller, and the trail records the balancer on every row.
+     */
+    it('believes the caller a trusted hop forwarded', function (): void {
+        config(['platform.http.trusted_proxies' => '10.0.0.1,10.0.0.2']);
+
+        expect(throughProxy())->toBe('203.0.113.9');
+    });
+
+    it('believes nothing forwarded by a hop it was not told about', function (): void {
+        config(['platform.http.trusted_proxies' => '192.0.2.1']);
+
+        expect(throughProxy())->toBe('10.0.0.1');
+    });
+
+    it('believes nothing at all when the host configured nothing', function (): void {
+        config(['platform.http.trusted_proxies' => null]);
+
+        expect(throughProxy())->toBe('10.0.0.1');
+    });
+
+    it('believes every hop only when told to in so many words', function (): void {
+        config(['platform.http.trusted_proxies' => '*']);
+
+        expect(throughProxy())->toBe('203.0.113.9');
     });
 });

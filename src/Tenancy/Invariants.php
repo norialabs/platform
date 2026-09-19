@@ -99,12 +99,27 @@ class Invariants
         return $names;
     }
 
-    /** @return list<string> */
+    /**
+     * The product's list, plus the package's own tables.
+     *
+     * All three carry the tenant column and all three sit outside tenancy
+     * on purpose: the trail outlives the workspace it describes, and a
+     * sign-in code and an invitation are both read before anybody knows
+     * which workspace they belong to. Resolved through Platform so a host
+     * that renamed one does not have to declare it again.
+     *
+     * @return list<string>
+     */
     private static function unscoped(): array
     {
         $tables = Config::array('platform.tenancy.unscoped_tables', []);
 
-        return array_values(array_filter($tables, is_string(...)));
+        return [
+            ...array_values(array_filter($tables, is_string(...))),
+            Platform::table('audit_logs'),
+            Platform::table('otp_challenges'),
+            Platform::table('invitations'),
+        ];
     }
 
     private static function connection(): Connection

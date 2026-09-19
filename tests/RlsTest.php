@@ -146,3 +146,15 @@ it('stops a written row ever being changed', function (): void {
         DB::table('trail')->where('note', 'written')->update(['note' => 'changed']);
     });
 })->throws(QueryException::class, 'append-only');
+
+/*
+ * All three carry the tenant column and all three sit outside tenancy on
+ * purpose. Forgetting one turns the deployment check into a false alarm
+ * that everybody learns to ignore.
+ */
+it('does not report its own unscoped tables as unprotected', function (): void {
+    expect(Invariants::tablesWithoutPolicy())
+        ->not->toContain('audit_logs')
+        ->not->toContain('otp_challenges')
+        ->not->toContain('invitations');
+});
