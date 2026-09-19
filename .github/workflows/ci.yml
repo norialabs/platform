@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main, release]
+  pull_request:
+    branches: [main, release]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    name: PHP 8.5
+
+    # The isolation tests need Postgres and a role that cannot ignore a policy.
+    # Without both they skip, which passes while proving nothing.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: pdo_pgsql, pgsql
+          coverage: xdebug
+
+      - name: Validate composer metadata
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Check code style
+        run: ./vendor/bin/pint --test
+
+      - name: Run static analysis
+        run: ./vendor/bin/phpstan analyse --no-progress
+
+      # platform_test cannot bypass row level security, so the policies are
+      # actually under test. platform_admin can, which is what the dump and
+      # restore tests need to read a file back that is not empty.
+      - name: Create the test roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -U postgres -c "create role platform_test login password 'platform_test' nosuperuser nobypassrls"
+          psql -h 127.0.0.1 -U postgres -c "create database platform_test owner platform_test"
+          psql -h 127.0.0.1 -U postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls in role platform_test"
+          psql -h 127.0.0.1 -U postgres -d platform_test -c "grant all on schema public to platform_test"
+
+      - name: Run tests against Postgres
+        env:
+          NORIA_TEST_PG: pgsql://platform_test:platform_test@127.0.0.1:5432/platform_test
+          NORIA_TEST_PG_ADMIN: pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test
+        run: ./vendor/bin/pest
+
+      # Everything Postgres-only skips here. Run it anyway: a product on SQLite
+      # should still get a suite that passes rather than one that errors.
+      - name: Run tests on SQLite
+        run: ./vendor/bin/pest
+
+      - name: Verify package archive
+        run: composer archive --format=zip --dir=/tmp
+
+  verify:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Required checks passed
+        run: echo "All required CI checks passed."
