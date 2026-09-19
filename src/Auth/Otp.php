@@ -36,7 +36,7 @@ class Otp
 
         Platform::otpChallengeModel()::query()->create([
             'destination_hash' => $this->hash->of($to->value),
-            'destination_hint' => $to->masked(),
+            'destination_hint' => $to->hint(Config::string('noria.auth.otp.hint', 'masked')),
             'channel' => $channel->value,
             'code_hash' => Hash::make($code),
             'attempts' => 0,

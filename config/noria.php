@@ -191,6 +191,14 @@ return [
     'invitations' => [
         'ttl_days' => (int) env('NORIA_INVITATION_TTL_DAYS', 7),
 
+        /*
+         * The address is always hashed. This is only what sits beside it for
+         * a person to read: 'masked' (a**@example.com) or 'plain'. Plain
+         * belongs where the reader is the one who supplied the address, such
+         * as an admin reviewing the invitations their workspace has open.
+         */
+        'hint' => env('NORIA_INVITATION_HINT', 'masked'),
+
         'token_guc' => env('NORIA_INVITATION_GUC', 'app.invitation_token'),
     ],
 
@@ -204,6 +212,9 @@ return [
             'ttl' => (int) env('NORIA_OTP_TTL', 10),
             'attempts' => (int) env('NORIA_OTP_ATTEMPTS', 5),
             'throttle' => (int) env('NORIA_OTP_THROTTLE', 60),
+
+            /* As noria.invitations.hint, but a sign-in log rarely wants plain. */
+            'hint' => env('NORIA_OTP_HINT', 'masked'),
         ],
     ],
 ];
