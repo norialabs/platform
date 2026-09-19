@@ -60,12 +60,12 @@ final class Permissions implements Arrayable, JsonSerializable
 
     public function grant(PermissionResource $resource, PermissionAction ...$actions): self
     {
-        $existing = $this->grants[$resource->value] ?? [];
-        $added = array_map(fn (PermissionAction $action): string => $action->value, $actions);
+        $existing = $this->grants[self::key($resource)] ?? [];
+        $added = array_map(self::key(...), $actions);
 
         return self::fromArray([
             ...$this->grants,
-            $resource->value => array_values(array_unique([...$existing, ...$added])),
+            self::key($resource) => array_values(array_unique([...$existing, ...$added])),
         ]);
     }
 
@@ -144,10 +144,10 @@ final class Permissions implements Arrayable, JsonSerializable
     public function catalog(): array
     {
         return array_map(fn (PermissionResource $resource): array => [
-            'resource' => $resource->value,
+            'resource' => self::key($resource),
             'label' => $resource->label(),
             'actions' => array_map(fn (PermissionAction $action): array => [
-                'action' => $action->value,
+                'action' => self::key($action),
                 'label' => $action->label(),
                 'granted' => $this->has($resource, $action),
             ], $resource->actions()),
@@ -190,7 +190,7 @@ final class Permissions implements Arrayable, JsonSerializable
             $resource = Catalog::resource($resourceValue)
                 ?? throw new InvalidArgumentException("Unknown permission resource [{$resourceValue}].");
 
-            $clean[$resource->value] = self::validateActions($resource, $actions);
+            $clean[self::key($resource)] = self::validateActions($resource, $actions);
         }
 
         return $clean;
@@ -242,9 +242,21 @@ final class Permissions implements Arrayable, JsonSerializable
     private static function stringify(mixed $action): string
     {
         if ($action instanceof PermissionAction) {
-            return $action->value;
+            return self::key($action);
         }
 
         return is_scalar($action) ? (string) $action : '';
+    }
+
+    /**
+     * The stored key for a resource or a verb.
+     *
+     * BackedEnum::$value is string|int and the column is a string, so an
+     * int backed catalogue is normalised rather than refused: which keys a
+     * product uses is the product's decision, not this package's.
+     */
+    private static function key(PermissionResource|PermissionAction $case): string
+    {
+        return (string) $case->value;
     }
 }

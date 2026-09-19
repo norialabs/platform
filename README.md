@@ -3,9 +3,9 @@
 [![CI](https://github.com/norialabs/platform/actions/workflows/ci.yml/badge.svg)](https://github.com/norialabs/platform/actions/workflows/ci.yml)
 [![Packagist](https://img.shields.io/packagist/v/norialabs/platform)](https://packagist.org/packages/norialabs/platform)
 
-The chassis every Noria Laravel product sits on. Built for our own products and pinned hard to
-PHP 8.5 and Laravel 13 because we control every consumer - but public, and MIT, so nothing here
-is a secret you have to take on trust.
+The chassis every Noria Laravel product sits on. Built for our own products and pinned to
+Laravel 13, because we control every consumer - but public, and MIT, so nothing here is a secret
+you have to take on trust. Runs on PHP 8.3, 8.4 and 8.5.
 
 Extracted from zana and the CRM, which had been solving the same eight problems twice. Where the
 two had diverged, the better implementation won and the other one's extras were folded in.
@@ -267,11 +267,17 @@ Fraction digits are therefore a display decision, per currency in `noria.money.f
 falling back to `noria.money.digits` and capped at two. Each formatter says which it wants:
 
 ```php
-$price->format();            // KES 3 - the symbol, at the currency's own precision
+$price->format();            // Ksh 3 - the local symbol, at the currency's own precision
 $price->document();          // 3     - bare, for a column that has its own alignment
 $price->rate();              // 2.75  - bare, always two decimals
-$price->formatUnitPrice();   // KES 2.75 - a unit price always shows both
+$price->formatUnitPrice();   // Ksh 2.75 - a unit price always shows both
 ```
+
+The locale is pinned per currency, never read from `app.locale`. ICU renders KES as `KES` under
+`en` and `Ksh` under `en_KE`, so leaving it to configuration means a deploy that sets a locale
+silently rewrites every amount in the product. The default is `en_<country>` taken off the
+currency code, which is right wherever the code names its country - `noria.money.locales` carries
+the ones that do not, the euro being the obvious one.
 
 `fromMajor` takes a **string** and parses it rather than casting through a float, because
 `(float) 'twelve'` is a silent zero and a silent zero is an invoice nobody queries until month
