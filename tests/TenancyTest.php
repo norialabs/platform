@@ -88,7 +88,7 @@ it('clears every widening setting on the way out, not only the workspace', funct
     $tenancy->clear();
 
     expect(guc('app.staff_read'))->toBe('');
-    expect(guc('app.platform_write'))->toBe('');
+    expect(guc('app.noria_write'))->toBe('');
     expect(guc('app.workspace_id'))->toBe('');
 });
 
@@ -102,7 +102,7 @@ it('refuses a setting nobody has arranged to clear', function (): void {
 })->throws(TenancyMissing::class, 'app.undeclared');
 
 it('accepts a setting once the product declares it', function (): void {
-    config(['platform.tenancy.gucs' => [...config('platform.tenancy.gucs'), 'app.portal_token']]);
+    config(['noria.tenancy.gucs' => [...config('noria.tenancy.gucs'), 'app.portal_token']]);
 
     $seen = app(Tenancy::class)->withGuc(['app.portal_token' => 'abc'], fn (): string => guc('app.portal_token'));
 
@@ -112,15 +112,15 @@ it('accepts a setting once the product declares it', function (): void {
 it('takes back a widening setting after the work that needed it', function (): void {
     $tenancy = app(Tenancy::class);
 
-    $tenancy->asPlatform(fn () => expect(guc('app.platform_write'))->toBe('on'));
+    $tenancy->asPlatform(fn () => expect(guc('app.noria_write'))->toBe('on'));
 
-    expect(guc('app.platform_write'))->toBe('');
+    expect(guc('app.noria_write'))->toBe('');
 });
 
 it('reads the workspace setting name from config, so a product can rename it', function (): void {
     config([
-        'platform.tenancy.workspace_guc' => 'app.tenant',
-        'platform.tenancy.gucs' => ['app.tenant'],
+        'noria.tenancy.workspace_guc' => 'app.tenant',
+        'noria.tenancy.gucs' => ['app.tenant'],
     ]);
 
     app(Tenancy::class)->set('01a0b000-0000-7000-8000-000000000001');
@@ -162,7 +162,7 @@ describe('the middleware', function (): void {
 
 describe('a product with no tenants', function (): void {
     it('writes no settings at all when tenancy is turned off', function (): void {
-        config(['platform.tenancy.enabled' => false]);
+        config(['noria.tenancy.enabled' => false]);
 
         app(Tenancy::class)->set('01a0b000-0000-7000-8000-00000000000a');
 
@@ -209,8 +209,8 @@ describe('stamping a row', function (): void {
         });
 
         config([
-            'platform.tenancy.column' => 'tenant_id',
-            'platform.tenancy.gucs' => ['app.workspace_id'],
+            'noria.tenancy.column' => 'tenant_id',
+            'noria.tenancy.gucs' => ['app.workspace_id'],
         ]);
 
         app(Tenancy::class)->run('01a0b000-0000-7000-8000-00000000000a', function (): void {
@@ -242,7 +242,7 @@ describe('a queued job', function (): void {
     });
 
     it('takes the lane the product configured', function (): void {
-        config(['platform.tenancy.queue' => 'slow']);
+        config(['noria.tenancy.queue' => 'slow']);
 
         expect((new CountWidgets('01a0b000-0000-7000-8000-00000000000a'))->queue)->toBe('slow');
     });

@@ -46,7 +46,7 @@ abstract class TenantJob implements ShouldQueue
         // Per workspace: one customer must not wait on another customer's file.
         return [
             (new WithoutOverlapping($this->lockKey()))
-                ->expireAfter(Config::integer('platform.tenancy.overlap_expires_after', 3600)),
+                ->expireAfter(Config::integer('noria.tenancy.overlap_expires_after', 3600)),
         ];
     }
 
@@ -61,7 +61,7 @@ abstract class TenantJob implements ShouldQueue
 
     protected function lane(): string
     {
-        return Config::string('platform.tenancy.queue', 'default');
+        return Config::string('noria.tenancy.queue', 'default');
     }
 
     /** What must not run twice at once. The workspace by default; narrow it where that is too wide. */

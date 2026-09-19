@@ -7,28 +7,28 @@ return [
      * Null keeps the platform on the default connection. Point it elsewhere
      * to put the audit trail and the tenancy checks on another database.
      */
-    'connection' => env('PLATFORM_DB_CONNECTION'),
+    'connection' => env('NORIA_DB_CONNECTION'),
 
     'tables' => [
-        'audit_logs' => env('PLATFORM_TABLE_AUDIT_LOGS'),
-        'otp_challenges' => env('PLATFORM_TABLE_OTP_CHALLENGES'),
-        'invitations' => env('PLATFORM_TABLE_INVITATIONS'),
+        'audit_logs' => env('NORIA_TABLE_AUDIT_LOGS'),
+        'otp_challenges' => env('NORIA_TABLE_OTP_CHALLENGES'),
+        'invitations' => env('NORIA_TABLE_INVITATIONS'),
     ],
 
-    'table_prefix' => env('PLATFORM_TABLE_PREFIX', ''),
+    'table_prefix' => env('NORIA_TABLE_PREFIX', ''),
 
-    'load_migrations' => (bool) env('PLATFORM_LOAD_MIGRATIONS', true),
+    'load_migrations' => (bool) env('NORIA_LOAD_MIGRATIONS', true),
 
     'tenancy' => [
-        'enabled' => (bool) env('PLATFORM_TENANCY', true),
+        'enabled' => (bool) env('NORIA_TENANCY', true),
 
         /*
          * The column every tenant table carries, and the setting the policies
          * read it from. Both appear in generated SQL, so changing either is a
          * migration, not a config flip.
          */
-        'column' => env('PLATFORM_TENANT_COLUMN', 'workspace_id'),
-        'workspace_guc' => env('PLATFORM_TENANT_GUC', 'app.workspace_id'),
+        'column' => env('NORIA_TENANT_COLUMN', 'workspace_id'),
+        'workspace_guc' => env('NORIA_TENANT_GUC', 'app.workspace_id'),
 
         /*
          * Every setting the policies read. clear() resets all of them, and
@@ -44,12 +44,12 @@ return [
             'app.workspace_id',
             'app.user_id',
             'app.staff_read',
-            'app.platform_write',
+            'app.noria_write',
             'app.invitation_token',
         ],
 
-        'staff_read_guc' => env('PLATFORM_STAFF_READ_GUC', 'app.staff_read'),
-        'platform_write_guc' => env('PLATFORM_WRITE_GUC', 'app.platform_write'),
+        'staff_read_guc' => env('NORIA_STAFF_READ_GUC', 'app.staff_read'),
+        'noria_write_guc' => env('NORIA_WRITE_GUC', 'app.noria_write'),
 
         /*
          * Tables that carry the tenant column but are deliberately outside
@@ -66,8 +66,8 @@ return [
             'personal_access_tokens',
         ],
 
-        'queue' => env('PLATFORM_TENANT_QUEUE', 'default'),
-        'overlap_expires_after' => (int) env('PLATFORM_TENANT_OVERLAP_TTL', 3600),
+        'queue' => env('NORIA_TENANT_QUEUE', 'default'),
+        'overlap_expires_after' => (int) env('NORIA_TENANT_OVERLAP_TTL', 3600),
     ],
 
     /*
@@ -81,7 +81,7 @@ return [
     ],
 
     'audit' => [
-        'enabled' => (bool) env('PLATFORM_AUDIT', true),
+        'enabled' => (bool) env('NORIA_AUDIT', true),
     ],
 
     'http' => [
@@ -91,9 +91,9 @@ return [
          * dropping the middleware.
          */
         'security_headers' => [
-            'enabled' => (bool) env('PLATFORM_SECURITY_HEADERS', true),
-            'report_only' => (bool) env('PLATFORM_CSP_REPORT_ONLY', false),
-            'report_uri' => env('PLATFORM_CSP_REPORT_URI'),
+            'enabled' => (bool) env('NORIA_SECURITY_HEADERS', true),
+            'report_only' => (bool) env('NORIA_CSP_REPORT_ONLY', false),
+            'report_uri' => env('NORIA_CSP_REPORT_URI'),
             'directives' => [
                 'default-src' => ["'self'"],
                 'base-uri' => ["'self'"],
@@ -107,14 +107,14 @@ return [
                 'connect-src' => ["'self'"],
             ],
             'permissions_policy' => 'camera=(), microphone=(), geolocation=(), payment=()',
-            'hsts_max_age' => (int) env('PLATFORM_HSTS_MAX_AGE', 31_536_000),
+            'hsts_max_age' => (int) env('NORIA_HSTS_MAX_AGE', 31_536_000),
         ],
 
         /*
          * Null trusts nothing. '*' trusts every proxy, which is correct only
          * where the container is never reachable except through one.
          */
-        'trusted_proxies' => env('PLATFORM_TRUSTED_PROXIES'),
+        'trusted_proxies' => env('NORIA_TRUSTED_PROXIES'),
     ],
 
     'log' => [
@@ -126,6 +126,25 @@ return [
         'credential_keys' => [],
         'credential_suffixes' => [],
         'pii_keys' => [],
+
+        /*
+         * Subtrees kept exactly as they arrived. A provider's own document
+         * is evidence: masking a field inside it makes the record disagree
+         * with what the provider sent, and a reconciliation against it then
+         * fails for the wrong reason.
+         *
+         * Replaces the default rather than adding to it. This list is a
+         * hole, and a product holding user input under a key called
+         * payload has to be able to close it.
+         */
+        'verbatim_keys' => ['payload'],
+
+        /*
+         * Keys whose value is an address. The query string is dropped,
+         * because a token in one is still a token, and the path alone
+         * keeps the line useful.
+         */
+        'address_suffixes' => ['url', 'uri', 'endpoint', 'callback'],
     ],
 
     'scheduler' => [
@@ -133,7 +152,7 @@ return [
          * Longer than the minute the heartbeat is scheduled at, so one slow
          * run is not an outage, short enough that a stopped scheduler is.
          */
-        'heartbeat_ttl' => (int) env('PLATFORM_HEARTBEAT_TTL', 300),
+        'heartbeat_ttl' => (int) env('NORIA_HEARTBEAT_TTL', 300),
     ],
 
     /*
@@ -143,31 +162,31 @@ return [
      */
     'errors' => [
         'codes' => [502, 504],
-        'view' => env('PLATFORM_ERROR_VIEW', 'errors.'),
-        'stylesheet' => env('PLATFORM_ERROR_STYLESHEET', 'resources/css/app.css'),
+        'view' => env('NORIA_ERROR_VIEW', 'errors.'),
+        'stylesheet' => env('NORIA_ERROR_STYLESHEET', 'resources/css/app.css'),
     ],
 
     'money' => [
-        'currency' => env('PLATFORM_CURRENCY', 'KES'),
-        'minor_units' => (int) env('PLATFORM_CURRENCY_MINOR_UNITS', 2),
+        'currency' => env('NORIA_CURRENCY', 'KES'),
+        'minor_units' => (int) env('NORIA_CURRENCY_MINOR_UNITS', 2),
     ],
 
     'db' => [
         /*
          * The disk is the host's - the package never invents storage.
          */
-        'disk' => env('PLATFORM_BACKUP_DISK', 'local'),
-        'timeout' => (int) env('PLATFORM_BACKUP_TIMEOUT', 1800),
-        'compression' => (int) env('PLATFORM_BACKUP_COMPRESSION', 9),
-        'gzip' => (bool) env('PLATFORM_BACKUP_GZIP', true),
-        'working_directory' => env('PLATFORM_BACKUP_WORKDIR'),
+        'disk' => env('NORIA_BACKUP_DISK', 'local'),
+        'timeout' => (int) env('NORIA_BACKUP_TIMEOUT', 1800),
+        'compression' => (int) env('NORIA_BACKUP_COMPRESSION', 9),
+        'gzip' => (bool) env('NORIA_BACKUP_GZIP', true),
+        'working_directory' => env('NORIA_BACKUP_WORKDIR'),
 
         /*
          * Object storage fails in ways a local disk does not, and a failed
          * upload looks identical to a rejected one once the disk swallows
          * the reason. Retried with a widening gap before it is called lost.
          */
-        'attempts' => (int) env('PLATFORM_BACKUP_ATTEMPTS', 3),
+        'attempts' => (int) env('NORIA_BACKUP_ATTEMPTS', 3),
 
         /*
          * Two tiers rather than one retention number: an hourly dump is for
@@ -179,13 +198,13 @@ return [
          */
         'tiers' => [
             'hourly' => [
-                'prefix' => env('PLATFORM_BACKUP_HOURLY_PREFIX', 'backups/hourly'),
-                'hours' => (int) env('PLATFORM_BACKUP_HOURLY_HOURS', 48),
+                'prefix' => env('NORIA_BACKUP_HOURLY_PREFIX', 'backups/hourly'),
+                'hours' => (int) env('NORIA_BACKUP_HOURLY_HOURS', 48),
             ],
             'daily' => [
-                'prefix' => env('PLATFORM_BACKUP_DAILY_PREFIX', 'backups/daily'),
-                'days' => (int) env('PLATFORM_BACKUP_DAILY_DAYS', 30),
-                'hour' => (int) env('PLATFORM_BACKUP_DAILY_HOUR', 0),
+                'prefix' => env('NORIA_BACKUP_DAILY_PREFIX', 'backups/daily'),
+                'days' => (int) env('NORIA_BACKUP_DAILY_DAYS', 30),
+                'hour' => (int) env('NORIA_BACKUP_DAILY_HOUR', 0),
             ],
         ],
 
@@ -196,7 +215,7 @@ return [
          * pg_dump sees no rows at all - so Backup refuses rather than
          * writing a file that restores to an empty database.
          */
-        'admin_connection' => env('PLATFORM_DB_ADMIN_CONNECTION'),
+        'admin_connection' => env('NORIA_DB_ADMIN_CONNECTION'),
 
         'rebuild' => [
             /*
@@ -219,9 +238,9 @@ return [
          * every outstanding invitation and sign-in code at once. Falls back
          * to the application key when unset.
          */
-        'hash_key' => env('PLATFORM_HASH_KEY'),
+        'hash_key' => env('NORIA_HASH_KEY'),
 
-        'country' => env('PLATFORM_COUNTRY', 'KE'),
+        'country' => env('NORIA_COUNTRY', 'KE'),
 
         /*
          * Local spellings normalise against these. A product selling into
@@ -240,26 +259,26 @@ return [
     ],
 
     'invitations' => [
-        'ttl_days' => (int) env('PLATFORM_INVITATION_TTL_DAYS', 7),
+        'ttl_days' => (int) env('NORIA_INVITATION_TTL_DAYS', 7),
 
         /*
          * Somebody accepting has not joined a workspace yet, so the row is
          * read through a policy keyed on this setting rather than through
          * tenancy. Add it to tenancy.gucs or nothing will clear it.
          */
-        'token_guc' => env('PLATFORM_INVITATION_GUC', 'app.invitation_token'),
+        'token_guc' => env('NORIA_INVITATION_GUC', 'app.invitation_token'),
     ],
 
     'auth' => [
         'social' => [
-            'state_ttl' => (int) env('PLATFORM_SOCIAL_STATE_TTL', 10),
+            'state_ttl' => (int) env('NORIA_SOCIAL_STATE_TTL', 10),
         ],
 
         'otp' => [
-            'length' => (int) env('PLATFORM_OTP_LENGTH', 6),
-            'ttl' => (int) env('PLATFORM_OTP_TTL', 10),
-            'attempts' => (int) env('PLATFORM_OTP_ATTEMPTS', 5),
-            'throttle' => (int) env('PLATFORM_OTP_THROTTLE', 60),
+            'length' => (int) env('NORIA_OTP_LENGTH', 6),
+            'ttl' => (int) env('NORIA_OTP_TTL', 10),
+            'attempts' => (int) env('NORIA_OTP_ATTEMPTS', 5),
+            'throttle' => (int) env('NORIA_OTP_THROTTLE', 60),
         ],
     ],
 ];

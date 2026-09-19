@@ -44,7 +44,7 @@ class PlatformServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/platform.php', 'platform');
+        $this->mergeConfigFrom(__DIR__.'/../config/noria.php', 'noria');
 
         // Scoped, not singleton: a long-lived worker serves many workspaces,
         // and a connection that remembers the last one is the whole problem.
@@ -89,18 +89,18 @@ class PlatformServiceProvider extends ServiceProvider
             ]);
 
             $this->publishes([
-                __DIR__.'/../config/platform.php' => config_path('platform.php'),
-            ], 'platform-config');
+                __DIR__.'/../config/noria.php' => config_path('noria.php'),
+            ], 'noria-config');
 
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations' => database_path('migrations'),
-            ], 'platform-migrations');
+            ], 'noria-migrations');
         }
 
         // Loaded from the package unless the host published them. Doing both
         // creates every table twice, which fails on the second CREATE and
         // leaves a half-migrated database behind.
-        if (Config::boolean('platform.load_migrations', true)) {
+        if (Config::boolean('noria.load_migrations', true)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
 

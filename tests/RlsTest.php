@@ -91,7 +91,7 @@ it('leaves a table out of the report once the product says it is deliberate', fu
         $table->uuid('workspace_id')->nullable();
     });
 
-    config(['platform.tenancy.unscoped_tables' => ['unguarded']]);
+    config(['noria.tenancy.unscoped_tables' => ['unguarded']]);
 
     expect(Invariants::tablesWithoutPolicy())->not->toContain('unguarded');
 });

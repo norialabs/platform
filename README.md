@@ -10,7 +10,7 @@ two had diverged, the better implementation won and the other one's extras were 
 
 ```bash
 composer require norialabs/platform
-php artisan vendor:publish --tag=platform-config
+php artisan vendor:publish --tag=noria-config
 php artisan migrate
 ```
 
@@ -44,7 +44,7 @@ $tenancy->asStaff(fn () => Workspace::count());     // an operator screen
 $tenancy->asPlatform(fn () => $seeder->run());      // the sanctioned platform write
 ```
 
-**Every setting has to be declared in `platform.tenancy.gucs`**, because `clear()` resets exactly
+**Every setting has to be declared in `noria.tenancy.gucs`**, because `clear()` resets exactly
 that list and pushing one that is not on it throws. Two of the settings widen what a connection
 can see rather than narrowing it, and the unwind is allowed to fail - so a pooled connection still
 holding `staff_read` would read every workspace for every request after. A setting `clear()` does
@@ -57,7 +57,7 @@ Models use `BelongsToWorkspace`, which stamps the workspace as a row is created.
 insert has to name its own, and the one that forgets is refused by the policy's `with check` - or,
 on a nullable column, writes an orphan nobody can read again.
 
-`php artisan platform:tenancy-check` reports every way one workspace could read another: a role
+`php artisan noria:tenancy-check` reports every way one workspace could read another: a role
 that is superuser or holds BYPASSRLS, a tenant table with no policy, a policy the table owner is
 still exempt from. Run it at boot, on a clock, and in CI.
 
@@ -91,7 +91,7 @@ its own failure rather than one from inside this package.
 
 `Logger::app/auth/backup/exception` with the context scrubbed first. Keys are normalised before
 matching, so `Api-Key`, `api_key` and `apikey` are one key, and suffixes catch the prefixed
-variants an exact list misses. A product adds its own through `platform.log.*`, however it spells
+variants an exact list misses. A product adds its own through `noria.log.*`, however it spells
 them, and never loses the defaults.
 
 Masked rather than dropped: a support ticket saying the token ended `9f` is answerable, one saying
@@ -140,7 +140,7 @@ no mail, no session, no routes: those differ per product and these do not.
 Neither the code nor the address it went to is kept in clear, so a dump of the table signs nobody
 in and names nobody. Attempts are counted on the row rather than in the cache, issuing cancels
 whatever was outstanding so the newest message is always the one that works, and a resend inside
-`platform.auth.otp.throttle` throws `OtpThrottled` carrying the wait.
+`noria.auth.otp.throttle` throws `OtpThrottled` carrying the wait.
 
 `SocialState` mints and claims the nonce that binds a provider round trip to the browser that
 started it - stateless Socialite sends no state parameter at all - and records who began it,
@@ -174,7 +174,7 @@ What a role means and who becomes a member stay with the product: `accept()` mar
 used inside its workspace and hands it back for the caller to write the membership from. Delivery
 is the `Courier` contract, because the wording, the template and the provider are the product's.
 
-A token is read through a policy keyed on `platform.invitations.token_guc` rather than through
+A token is read through a policy keyed on `noria.invitations.token_guc` rather than through
 tenancy, because somebody accepting has not joined a workspace yet:
 
 ```php
@@ -183,12 +183,12 @@ Rls::allowLookupByGuc('invitations', 'token_hash', 'app.invitation_token');
 
 ### Db
 
-`platform:backup`, `platform:restore`, `platform:rebuild`, and a dumper per driver. `register()`
+`noria:backup`, `noria:restore`, `noria:rebuild`, and a dumper per driver. `register()`
 takes a product's own.
 
 **Backups need a role that bypasses row level security.** `pg_dump` run as an RLS-constrained role
 writes a file that looks entirely normal and holds no rows, and nobody finds out until a restore.
-The preflight refuses rather than letting that file exist, so point `platform.db.admin_connection`
+The preflight refuses rather than letting that file exist, so point `noria.db.admin_connection`
 at a role created with `bypassrls`.
 
 Two tiers, not one retention number: an hourly dump answers the mistake somebody made this
@@ -202,7 +202,7 @@ failure and a rejection look identical once the disk swallows the reason.
 `restore --database=` restores beside the live database rather than over it, creating it and
 granting the application role in: a rehearsal that proves the dump before anybody bets on it.
 
-`platform:rebuild` exists because migrations edited in place rather than added to leave a
+`noria:rebuild` exists because migrations edited in place rather than added to leave a
 long-lived database behind for good - `migrate` sees every file already run, and the gap only
 surfaces as a missing relation somewhere deep inside a request. It runs the migrations against an
 empty probe database first and compares: a table or column the migrations no longer define is
@@ -213,7 +213,7 @@ reload and go back on afterwards, still not validated, because reloading grandfa
 through them would fail. Nothing is deleted, and if any step fails the error says how to swap the
 copy back.
 
-`platform:scheduler-heartbeat` on the schedule and `platform:scheduler-healthy` as the container
+`noria:scheduler-heartbeat` on the schedule and `noria:scheduler-healthy` as the container
 healthcheck: a scheduler that is running but never firing looks identical to a healthy one from
 outside.
 
@@ -226,7 +226,7 @@ believe forwarded headers at all.
 
 ### Errors
 
-`platform:build-error-pages` renders the gateway views to static files the edge can serve. A 502
+`noria:build-error-pages` renders the gateway views to static files the edge can serve. A 502
 or a 504 means the application is not answering, so the page for it cannot be rendered by the
 application and its stylesheet cannot be fetched either - both are baked in ahead of time.
 
@@ -246,32 +246,32 @@ export, padded and duplicated headers - and yields rows numbered the way the spr
 
 | Knob | How |
 |---|---|
-| Database | `platform.connection` |
-| Table names | `platform.table_prefix`, or `platform.tables.<name>` for one |
+| Database | `noria.connection` |
+| Table names | `noria.table_prefix`, or `noria.tables.<name>` for one |
 | Models | `Platform::useAuditLogModel(...)`, `useOtpChallengeModel(...)`, `useInvitationModel(...)` |
-| Hash key, country, dialling codes | `platform.identity.*` |
-| Invitation deadline and lookup setting | `platform.invitations.*` |
-| Tenant column and settings | `platform.tenancy.column`, `.workspace_guc`, `.gucs` |
-| Tables outside tenancy | `platform.tenancy.unscoped_tables` |
-| RBAC catalogue | `platform.rbac.resources`, `.actions` |
-| CSP directives | `platform.http.security_headers.directives` |
-| Currency and minor units | `platform.money.*` |
-| Backup disk, tiers, retention, retries | `platform.db.*` |
-| The role dumps and restores run as | `platform.db.admin_connection` |
-| Tables a rebuild does not carry | `platform.db.rebuild.unrestored` |
-| Checks a rebuild ends on | `platform.db.rebuild.verify_commands` |
-| OTP length, TTL, attempts, resend wait | `platform.auth.otp.*` |
-| Static error page codes, view, stylesheet | `platform.errors.*` |
-| Extra redaction keys | `platform.log.*` |
-| Trusted proxies | `platform.http.trusted_proxies` + the `TrustProxies` middleware |
-| Scheduler heartbeat window | `platform.scheduler.heartbeat_ttl` |
+| Hash key, country, dialling codes | `noria.identity.*` |
+| Invitation deadline and lookup setting | `noria.invitations.*` |
+| Tenant column and settings | `noria.tenancy.column`, `.workspace_guc`, `.gucs` |
+| Tables outside tenancy | `noria.tenancy.unscoped_tables` |
+| RBAC catalogue | `noria.rbac.resources`, `.actions` |
+| CSP directives | `noria.http.security_headers.directives` |
+| Currency and minor units | `noria.money.*` |
+| Backup disk, tiers, retention, retries | `noria.db.*` |
+| The role dumps and restores run as | `noria.db.admin_connection` |
+| Tables a rebuild does not carry | `noria.db.rebuild.unrestored` |
+| Checks a rebuild ends on | `noria.db.rebuild.verify_commands` |
+| OTP length, TTL, attempts, resend wait | `noria.auth.otp.*` |
+| Static error page codes, view, stylesheet | `noria.errors.*` |
+| Extra redaction keys | `noria.log.*` |
+| Trusted proxies | `noria.http.trusted_proxies` + the `TrustProxies` middleware |
+| Scheduler heartbeat window | `noria.scheduler.heartbeat_ttl` |
 
 `actor_id` on the trail is a string, not a uuid: the package cannot know the host's user model,
 and a product still keyed on bigint would have every write refused. The tenant column is read from
-`platform.tenancy.column` in the package's own migration too, so renaming it renames it everywhere.
+`noria.tenancy.column` in the package's own migration too, so renaming it renames it everywhere.
 
-Turn a module off with `platform.tenancy.enabled` or `platform.audit.enabled`. Publish and edit the
-migrations with `--tag=platform-migrations`, then set `PLATFORM_LOAD_MIGRATIONS=false` or every
+Turn a module off with `noria.tenancy.enabled` or `noria.audit.enabled`. Publish and edit the
+migrations with `--tag=noria-migrations`, then set `NORIA_LOAD_MIGRATIONS=false` or every
 table is created twice.
 
 ## Testing against it
@@ -283,7 +283,7 @@ rather than passing against tables that are wide open:
 psql postgres -c "create role platform_test login password 'platform_test' nosuperuser nobypassrls"
 psql postgres -c "create database platform_test owner platform_test"
 
-PLATFORM_TEST_PG="pgsql://platform_test:platform_test@127.0.0.1:5432/platform_test" vendor/bin/pest
+NORIA_TEST_PG="pgsql://platform_test:platform_test@127.0.0.1:5432/platform_test" vendor/bin/pest
 ```
 
 The dump and restore tests need a second role as well, one that may bypass row level security,
@@ -292,7 +292,7 @@ and they skip without it rather than passing against a file that would have come
 ```bash
 psql postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls in role platform_test"
 
-PLATFORM_TEST_PG_ADMIN="pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test" vendor/bin/pest
+NORIA_TEST_PG_ADMIN="pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test" vendor/bin/pest
 ```
 
-Without `PLATFORM_TEST_PG` the suite runs on SQLite and everything Postgres-only skips.
+Without `NORIA_TEST_PG` the suite runs on SQLite and everything Postgres-only skips.

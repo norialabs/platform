@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Config;
  */
 class SocialState
 {
-    private const PREFIX = 'platform:social:state:';
+    private const PREFIX = 'noria:social:state:';
 
     public function __construct(private Repository $cache) {}
 
@@ -31,7 +31,7 @@ class SocialState
         $this->cache->put(self::key($state), [
             'provider' => $provider,
             'actor_id' => $actorId,
-        ], now()->addMinutes(Config::integer('platform.auth.social.state_ttl', 10)));
+        ], now()->addMinutes(Config::integer('noria.auth.social.state_ttl', 10)));
 
         return $state;
     }

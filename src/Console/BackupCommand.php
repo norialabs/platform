@@ -10,7 +10,7 @@ use NoriaLabs\Platform\Db\BackupTier;
 
 class BackupCommand extends Command
 {
-    protected $signature = 'platform:backup
+    protected $signature = 'noria:backup
         {--disk= : The filesystem disk to upload to}
         {--tier= : Force hourly or daily rather than letting the clock decide}
         {--connection= : The database connection to dump}';

@@ -74,11 +74,11 @@ final class Catalog
      */
     private static function cases(string $key, string $contract): array
     {
-        $enum = Config::get('platform.rbac.'.$key);
+        $enum = Config::get('noria.rbac.'.$key);
 
         if (! is_string($enum) || ! enum_exists($enum) || ! is_a($enum, $contract, allow_string: true)) {
             throw new RuntimeException(
-                "platform.rbac.{$key} must name a backed enum implementing ".$contract.'.'
+                "noria.rbac.{$key} must name a backed enum implementing ".$contract.'.'
             );
         }
 

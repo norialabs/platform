@@ -24,7 +24,7 @@ class SecurityHeaders
     {
         $response = $next($request);
 
-        if (! Config::boolean('platform.http.security_headers.enabled', true)) {
+        if (! Config::boolean('noria.http.security_headers.enabled', true)) {
             return $response;
         }
 
@@ -46,13 +46,13 @@ class SecurityHeaders
             $this->cspHeader() => $this->policy($response),
         ];
 
-        $permissions = Config::string('platform.http.security_headers.permissions_policy', '');
+        $permissions = Config::string('noria.http.security_headers.permissions_policy', '');
 
         if ($permissions !== '') {
             $headers['Permissions-Policy'] = $permissions;
         }
 
-        $maxAge = Config::integer('platform.http.security_headers.hsts_max_age', 0);
+        $maxAge = Config::integer('noria.http.security_headers.hsts_max_age', 0);
 
         if ($request->isSecure() && $maxAge > 0) {
             $headers['Strict-Transport-Security'] = "max-age={$maxAge}; includeSubDomains";
@@ -72,14 +72,14 @@ class SecurityHeaders
 
     private function cspHeader(): string
     {
-        return Config::boolean('platform.http.security_headers.report_only', false)
+        return Config::boolean('noria.http.security_headers.report_only', false)
             ? 'Content-Security-Policy-Report-Only'
             : 'Content-Security-Policy';
     }
 
     private function policy(Response $response): string
     {
-        $directives = Config::array('platform.http.security_headers.directives', []);
+        $directives = Config::array('noria.http.security_headers.directives', []);
 
         if ($this->framed($response)) {
             $directives['frame-ancestors'] = ["'self'"];
@@ -99,7 +99,7 @@ class SecurityHeaders
             $parts[] = trim((string) $name.' '.implode(' ', $sources));
         }
 
-        $report = Config::get('platform.http.security_headers.report_uri');
+        $report = Config::get('noria.http.security_headers.report_uri');
 
         if (is_string($report) && $report !== '') {
             $parts[] = 'report-uri '.$report;

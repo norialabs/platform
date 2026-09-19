@@ -35,7 +35,7 @@ class Restore
             throw new RuntimeException('Refusing to restore over production without an explicit force.');
         }
 
-        $disk ??= Config::string('platform.db.disk', 'local');
+        $disk ??= Config::string('noria.db.disk', 'local');
 
         $settings = Connections::settings($connection);
         $appRole = Connections::value($settings, 'username');

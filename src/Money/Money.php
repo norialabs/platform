@@ -117,7 +117,7 @@ final class Money
 
     public static function fractionDigits(): int
     {
-        return Config::integer('platform.money.minor_units', 2);
+        return Config::integer('noria.money.minor_units', 2);
     }
 
     public static function maxMinor(): int
@@ -159,6 +159,6 @@ final class Money
 
     private static function defaultCurrency(): string
     {
-        return Config::string('platform.money.currency', 'KES');
+        return Config::string('noria.money.currency', 'KES');
     }
 }

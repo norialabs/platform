@@ -46,7 +46,7 @@ final class Connections
      */
     public static function asAdmin(array $settings): array
     {
-        $admin = Config::get('platform.db.admin_connection');
+        $admin = Config::get('noria.db.admin_connection');
 
         if (! is_string($admin) || $admin === '') {
             return $settings;
@@ -81,7 +81,7 @@ final class Connections
     public static function open(string $purpose, array $settings): Connection
     {
         /** @var Connection */
-        return DB::connectUsing('platform-'.$purpose.'-'.bin2hex(random_bytes(3)), $settings, force: true);
+        return DB::connectUsing('noria-'.$purpose.'-'.bin2hex(random_bytes(3)), $settings, force: true);
     }
 
     /**

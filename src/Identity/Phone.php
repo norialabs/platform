@@ -34,7 +34,7 @@ final class Phone implements Stringable
             return self::plausible($digits) ? new self('+'.$digits) : null;
         }
 
-        $code = self::diallingCode($country ?? Config::string('platform.identity.country', 'KE'));
+        $code = self::diallingCode($country ?? Config::string('noria.identity.country', 'KE'));
 
         if ($code === null) {
             return null;
@@ -77,7 +77,7 @@ final class Phone implements Stringable
 
     private static function diallingCode(string $country): ?string
     {
-        $codes = Config::array('platform.identity.dialling_codes', []);
+        $codes = Config::array('noria.identity.dialling_codes', []);
         $code = $codes[strtoupper($country)] ?? null;
 
         return is_scalar($code) ? (string) $code : null;

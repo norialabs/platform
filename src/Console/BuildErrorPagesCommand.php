@@ -20,7 +20,7 @@ use Throwable;
  */
 class BuildErrorPagesCommand extends Command
 {
-    protected $signature = 'platform:build-error-pages';
+    protected $signature = 'noria:build-error-pages';
 
     protected $description = 'Render the gateway error views to static files the edge can serve';
 
@@ -28,7 +28,7 @@ class BuildErrorPagesCommand extends Command
     {
         /** @var list<int> $codes */
         $codes = array_values(array_filter(
-            Config::array('platform.errors.codes', [502, 504]),
+            Config::array('noria.errors.codes', [502, 504]),
             is_int(...),
         ));
 
@@ -47,7 +47,7 @@ class BuildErrorPagesCommand extends Command
         View::share('errorInlineCss', $css);
 
         foreach ($codes as $code) {
-            $view = Config::string('platform.errors.view', 'errors.').$code;
+            $view = Config::string('noria.errors.view', 'errors.').$code;
 
             if (! View::exists($view)) {
                 $this->components->error("There is no [{$view}] view to render.");
@@ -67,7 +67,7 @@ class BuildErrorPagesCommand extends Command
 
     private function stylesheet(): ?string
     {
-        $asset = Config::get('platform.errors.stylesheet');
+        $asset = Config::get('noria.errors.stylesheet');
 
         if (! is_string($asset) || $asset === '') {
             return '';

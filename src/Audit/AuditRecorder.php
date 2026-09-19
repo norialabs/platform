@@ -27,14 +27,14 @@ class AuditRecorder
         array $metadata = [],
         ?string $reason = null,
     ): ?AuditLog {
-        if (! Config::boolean('platform.audit.enabled', true)) {
+        if (! Config::boolean('noria.audit.enabled', true)) {
             return null;
         }
 
         $actorId = Auth::id();
 
         return Platform::auditLogModel()::query()->create([
-            Config::string('platform.tenancy.column', 'workspace_id') => $this->tenancy->id(),
+            Config::string('noria.tenancy.column', 'workspace_id') => $this->tenancy->id(),
             'actor_id' => $actorId === null ? null : (string) $actorId,
             'actor_type' => $actorId === null ? 'system' : 'user',
             'action' => $action,

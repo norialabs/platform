@@ -49,23 +49,67 @@ final class Redactor
 
     /**
      * @param  array<array-key, mixed>  $payload
+     * @param  bool  $verbatim  inside a subtree that must not be touched
      * @return array<array-key, mixed>
      */
-    public static function scrub(array $payload): array
+    public static function scrub(array $payload, bool $verbatim = false): array
     {
         foreach ($payload as $key => $value) {
-            if (self::sensitive((string) $key)) {
+            $name = (string) $key;
+            $inside = $verbatim || self::verbatim($name);
+
+            if (is_array($value)) {
+                $payload[$key] = self::scrub($value, $inside);
+
+                continue;
+            }
+
+            // A provider's own document is evidence. Masking a field inside
+            // it makes the record disagree with what the provider sent, and
+            // a reconciliation against it then fails for the wrong reason.
+            if ($inside) {
+                continue;
+            }
+
+            if (self::sensitive($name)) {
                 $payload[$key] = self::mask($value);
 
                 continue;
             }
 
-            if (is_array($value)) {
-                $payload[$key] = self::scrub($value);
+            // A token in a query string is a token. Keeping the path leaves
+            // the line useful without carrying the credential.
+            if (self::addressed($name) && is_scalar($value)) {
+                $payload[$key] = self::withoutQuery((string) $value);
             }
         }
 
         return $payload;
+    }
+
+    /** Whether a key names a subtree kept exactly as it arrived. */
+    public static function verbatim(string $key): bool
+    {
+        return in_array(self::normalise($key), self::listed('verbatim_keys', ['payload']), true);
+    }
+
+    /** Whether a key holds something with a query string worth dropping. */
+    private static function addressed(string $key): bool
+    {
+        foreach (self::listed('address_suffixes', ['url', 'uri', 'endpoint', 'callback']) as $suffix) {
+            if (str_ends_with(self::normalise($key), $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function withoutQuery(string $value): string
+    {
+        $mark = strpos($value, '?');
+
+        return $mark === false ? $value : substr($value, 0, $mark);
     }
 
     public static function sensitive(string $key): bool
@@ -110,6 +154,23 @@ final class Redactor
     }
 
     /**
+     * A list the product owns outright, defaults used only when it names
+     * none. These decide what is *not* scrubbed, and an exemption a
+     * product cannot close is a hole: 'payload' is a common column name,
+     * and a product holding user input under it must be able to say so.
+     *
+     * @param  list<string>  $defaults
+     * @return list<string>
+     */
+    private static function listed(string $name, array $defaults): array
+    {
+        $configured = Config::array('noria.log.'.$name, []);
+        $named = array_values(array_filter($configured, is_string(...)));
+
+        return $named === [] ? $defaults : array_map(self::normalise(...), $named);
+    }
+
+    /**
      * A product adds its own without losing the defaults: a field that is
      * sensitive in one product is sensitive everywhere the log ends up.
      *
@@ -122,7 +183,7 @@ final class Redactor
      */
     private static function keys(string $name, array $defaults): array
     {
-        $extra = Config::array('platform.log.'.$name, []);
+        $extra = Config::array('noria.log.'.$name, []);
 
         foreach ($extra as $key) {
             if (is_string($key)) {

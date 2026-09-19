@@ -22,7 +22,7 @@ function to(string $raw): Destination
 }
 
 it('issues a code of the configured length', function (): void {
-    config(['platform.auth.otp.length' => 8]);
+    config(['noria.auth.otp.length' => 8]);
 
     expect(app(Otp::class)->issue(to('ada@example.com')))->toHaveLength(8);
 });
@@ -84,7 +84,7 @@ it('refuses a code that has expired', function (): void {
 
 /* A rate limit the cache forgets on restart is not a rate limit. */
 it('stops accepting guesses after the configured number of them', function (): void {
-    config(['platform.auth.otp.attempts' => 3]);
+    config(['noria.auth.otp.attempts' => 3]);
 
     $otp = app(Otp::class);
     $code = $otp->issue(to('ada@example.com'));
@@ -115,7 +115,7 @@ it('cannot be used twice', function (): void {
 
 /* Two live codes means the newest mail is not reliably the one that works. */
 it('cancels the outstanding code when a new one is asked for', function (): void {
-    config(['platform.auth.otp.throttle' => 0]);
+    config(['noria.auth.otp.throttle' => 0]);
 
     $otp = app(Otp::class);
     $first = $otp->issue(to('ada@example.com'));
@@ -154,7 +154,7 @@ describe('asking too often', function (): void {
     })->throws(OtpThrottled::class);
 
     it('says how long the caller has to wait', function (): void {
-        config(['platform.auth.otp.throttle' => 90]);
+        config(['noria.auth.otp.throttle' => 90]);
 
         $otp = app(Otp::class);
         $otp->issue(to('ada@example.com'));
@@ -181,7 +181,7 @@ describe('asking too often', function (): void {
     });
 
     it('does not hold anybody up when the product turned the limit off', function (): void {
-        config(['platform.auth.otp.throttle' => 0]);
+        config(['noria.auth.otp.throttle' => 0]);
 
         $otp = app(Otp::class);
         $otp->issue(to('ada@example.com'));
@@ -220,7 +220,7 @@ describe('a round trip through a provider', function (): void {
     });
 
     it('forgets a state the caller took too long to come back with', function (): void {
-        config(['platform.auth.social.state_ttl' => 1]);
+        config(['noria.auth.social.state_ttl' => 1]);
 
         $state = app(SocialState::class);
         $issued = $state->issue('google');

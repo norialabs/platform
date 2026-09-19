@@ -53,13 +53,13 @@ describe('money', function (): void {
     })->throws(RuntimeException::class);
 
     it('takes the currency from config when the caller names none', function (): void {
-        config(['platform.money.currency' => 'UGX']);
+        config(['noria.money.currency' => 'UGX']);
 
         expect(Money::zero()->currency)->toBe('UGX');
     });
 
     it('reads minor units from config, for a currency that has none', function (): void {
-        config(['platform.money.minor_units' => 0]);
+        config(['noria.money.minor_units' => 0]);
 
         expect(Money::fromMajor(1_500)->minor)->toBe(1_500);
     });
@@ -205,7 +205,7 @@ describe('money on a model', function (): void {
     });
 
     it('falls back to the configured currency only when the row says nothing', function (): void {
-        config(['platform.money.currency' => 'TZS']);
+        config(['noria.money.currency' => 'TZS']);
 
         Priced::query()->create(['id' => '01a0b000-0000-7000-8000-000000000004', 'total' => 500]);
 
@@ -235,25 +235,25 @@ describe('trusting a proxy in the middleware', function (): void {
      * one caller, and the trail records the balancer on every row.
      */
     it('believes the caller a trusted hop forwarded', function (): void {
-        config(['platform.http.trusted_proxies' => '10.0.0.1,10.0.0.2']);
+        config(['noria.http.trusted_proxies' => '10.0.0.1,10.0.0.2']);
 
         expect(throughProxy())->toBe('203.0.113.9');
     });
 
     it('believes nothing forwarded by a hop it was not told about', function (): void {
-        config(['platform.http.trusted_proxies' => '192.0.2.1']);
+        config(['noria.http.trusted_proxies' => '192.0.2.1']);
 
         expect(throughProxy())->toBe('10.0.0.1');
     });
 
     it('believes nothing at all when the host configured nothing', function (): void {
-        config(['platform.http.trusted_proxies' => null]);
+        config(['noria.http.trusted_proxies' => null]);
 
         expect(throughProxy())->toBe('10.0.0.1');
     });
 
     it('believes every hop only when told to in so many words', function (): void {
-        config(['platform.http.trusted_proxies' => '*']);
+        config(['noria.http.trusted_proxies' => '*']);
 
         expect(throughProxy())->toBe('203.0.113.9');
     });

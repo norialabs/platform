@@ -35,7 +35,7 @@ function dropRestoreTarget(): void
 /** A connection outside the test transaction, so a separate process can see the writes. */
 function committed(): Connection
 {
-    return DB::connection('platform_pg_admin');
+    return DB::connection('noria_pg_admin');
 }
 
 function dumpKey(string $tier, string $stamp, string $name = 'db'): string
@@ -68,7 +68,7 @@ describe('choosing a dumper', function (): void {
 describe('tiering and retention', function (): void {
     beforeEach(function (): void {
         Storage::fake('backups');
-        config(['platform.db.disk' => 'backups']);
+        config(['noria.db.disk' => 'backups']);
     });
 
     /*
@@ -103,7 +103,7 @@ describe('tiering and retention', function (): void {
      * would turn a storage bill into a missing backup.
      */
     it('reports a failed sweep rather than losing the dump that succeeded', function (): void {
-        config(['platform.db.tiers.hourly.prefix' => 'backups/hourly', 'platform.db.attempts' => 1]);
+        config(['noria.db.tiers.hourly.prefix' => 'backups/hourly', 'noria.db.attempts' => 1]);
         Storage::shouldReceive('disk')->andThrow(new RuntimeException('the endpoint is gone'));
 
         expect(app(Backup::class)->prune('backups', BackupTier::Hourly))->toBe(0);
@@ -255,7 +255,7 @@ describe('a real dump and restore', function (): void {
             $this->markTestSkipped('A dump needs a real server.');
         }
 
-        if (env('PLATFORM_TEST_PG_ADMIN') === null) {
+        if (env('NORIA_TEST_PG_ADMIN') === null) {
             $this->markTestSkipped('Needs a second connection whose role bypasses row level security.');
         }
 
@@ -264,7 +264,7 @@ describe('a real dump and restore', function (): void {
         }
 
         Storage::fake('backups');
-        config(['platform.db.disk' => 'backups', 'platform.db.admin_connection' => 'platform_pg_admin']);
+        config(['noria.db.disk' => 'backups', 'noria.db.admin_connection' => 'noria_pg_admin']);
 
         committed()->statement('drop table if exists widgets');
         committed()->statement('create table widgets (id int primary key, name text)');
@@ -272,7 +272,7 @@ describe('a real dump and restore', function (): void {
     });
 
     afterEach(function (): void {
-        if (env('PLATFORM_TEST_PG_ADMIN') !== null) {
+        if (env('NORIA_TEST_PG_ADMIN') !== null) {
             committed()->statement('drop table if exists widgets');
         }
     });
@@ -309,7 +309,7 @@ describe('a real dump and restore', function (): void {
     });
 
     it('promotes the first dump after the daily boundary', function (): void {
-        config(['platform.db.tiers.daily.hour' => 0]);
+        config(['noria.db.tiers.daily.hour' => 0]);
 
         $result = app(Backup::class)->run('backups');
 
@@ -318,7 +318,7 @@ describe('a real dump and restore', function (): void {
     });
 
     it('keeps the rest of the day hourly once a daily one exists', function (): void {
-        config(['platform.db.tiers.daily.hour' => 0]);
+        config(['noria.db.tiers.daily.hour' => 0]);
 
         app(Backup::class)->run('backups');
         $second = app(Backup::class)->run('backups');
@@ -334,7 +334,7 @@ describe('the preflight', function (): void {
         }
 
         Storage::fake('backups');
-        config(['platform.db.disk' => 'backups', 'platform.db.admin_connection' => null]);
+        config(['noria.db.disk' => 'backups', 'noria.db.admin_connection' => null]);
     });
 
     /*

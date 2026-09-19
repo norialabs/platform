@@ -13,7 +13,7 @@ use NoriaLabs\Platform\Tenancy\Invariants;
  */
 class TenancyCheckCommand extends Command
 {
-    protected $signature = 'platform:tenancy-check';
+    protected $signature = 'noria:tenancy-check';
 
     protected $description = 'Report any way one workspace could read another';
 

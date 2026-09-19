@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Config;
 /** Scheduled every minute; the healthcheck reads what it leaves behind. */
 class SchedulerHeartbeatCommand extends Command
 {
-    protected $signature = 'platform:scheduler-heartbeat';
+    protected $signature = 'noria:scheduler-heartbeat';
 
     protected $description = 'Record that the scheduler is still firing';
 
@@ -22,7 +22,7 @@ class SchedulerHeartbeatCommand extends Command
         Cache::put(
             SchedulerHealthyCommand::KEY,
             now()->toIso8601String(),
-            Config::integer('platform.scheduler.heartbeat_ttl', 300),
+            Config::integer('noria.scheduler.heartbeat_ttl', 300),
         );
 
         return self::SUCCESS;

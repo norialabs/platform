@@ -53,7 +53,7 @@ class Invariants
                   where p.tablename = c.relname and p.policyname like '%tenant_isolation'
               )
             order by 1
-        SQL, [Config::string('platform.tenancy.column', 'workspace_id')]);
+        SQL, [Config::string('noria.tenancy.column', 'workspace_id')]);
 
         return array_values(array_diff(self::names($rows), self::unscoped()));
     }
@@ -112,7 +112,7 @@ class Invariants
      */
     private static function unscoped(): array
     {
-        $tables = Config::array('platform.tenancy.unscoped_tables', []);
+        $tables = Config::array('noria.tenancy.unscoped_tables', []);
 
         return [
             ...array_values(array_filter($tables, is_string(...))),

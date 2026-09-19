@@ -15,7 +15,7 @@ use NoriaLabs\Platform\Db\Rebuild;
  */
 class RebuildCommand extends Command
 {
-    protected $signature = 'platform:rebuild
+    protected $signature = 'noria:rebuild
         {--copy= : The name for the copy taken first}
         {--keep : Keep the copy and the dump afterwards}
         {--bring-up=* : Commands to run against the reloaded rows}

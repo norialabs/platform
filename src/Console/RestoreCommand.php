@@ -11,7 +11,7 @@ use RuntimeException;
 
 class RestoreCommand extends Command
 {
-    protected $signature = 'platform:restore
+    protected $signature = 'noria:restore
         {key? : The backup to read, newest across both tiers when omitted}
         {--disk= : The filesystem disk to read from}
         {--database= : Restore into this database instead, creating it if needed}

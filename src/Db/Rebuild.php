@@ -202,7 +202,7 @@ class Rebuild
         if (! is_object($found) || ! ($found->rolsuper ?? false)) {
             throw new RuntimeException(
                 "The rebuild role [{$role}] is not a superuser, so the dump would come back empty and the "
-                .'reload could not disable referential triggers. Point platform.db.admin_connection at a superuser.'
+                .'reload could not disable referential triggers. Point noria.db.admin_connection at a superuser.'
             );
         }
     }
@@ -283,10 +283,10 @@ class Rebuild
         $default = Config::string('database.default');
 
         try {
-            Config::set('database.connections.platform-rebuild-probe', [...$settings, 'database' => $probe]);
-            DB::purge('platform-rebuild-probe');
+            Config::set('database.connections.noria-rebuild-probe', [...$settings, 'database' => $probe]);
+            DB::purge('noria-rebuild-probe');
 
-            if (Artisan::call('migrate', ['--database' => 'platform-rebuild-probe', '--force' => true]) !== 0) {
+            if (Artisan::call('migrate', ['--database' => 'noria-rebuild-probe', '--force' => true]) !== 0) {
                 throw new RuntimeException(
                     'The current migrations do not run against an empty database: '.trim(Artisan::output())
                 );
@@ -303,7 +303,7 @@ class Rebuild
         } finally {
             DB::setDefaultConnection($default);
             $this->release($probe);
-            DB::purge('platform-rebuild-probe');
+            DB::purge('noria-rebuild-probe');
             $this->dropDatabase($admin, $probe);
         }
     }
@@ -537,7 +537,7 @@ class Rebuild
      */
     private function verify(callable $report): void
     {
-        $commands = Config::array('platform.db.rebuild.verify_commands', []);
+        $commands = Config::array('noria.db.rebuild.verify_commands', []);
 
         foreach ($commands as $command) {
             if (! is_string($command)) {
@@ -590,7 +590,7 @@ class Rebuild
         $password = Connections::value($maintenance, 'password');
 
         $result = Process::env($password === '' ? [] : ['PGPASSWORD' => $password])
-            ->timeout(max(60, Config::integer('platform.db.timeout', 1800)))
+            ->timeout(max(60, Config::integer('noria.db.timeout', 1800)))
             ->run($arguments);
 
         if ($result->failed()) {
@@ -614,10 +614,10 @@ class Rebuild
 
     private function workingPath(string $database): string
     {
-        $configured = Config::get('platform.db.working_directory');
+        $configured = Config::get('noria.db.working_directory');
         $directory = is_string($configured) && $configured !== ''
             ? $configured
-            : sys_get_temp_dir().'/platform-backup';
+            : sys_get_temp_dir().'/noria-backup';
 
         if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
             throw new RuntimeException("Unable to create the working directory at {$directory}.");
@@ -639,7 +639,7 @@ class Rebuild
     /** @return list<string> tables whose rows the rebuild does not carry over */
     private function unrestored(): array
     {
-        $tables = Config::array('platform.db.rebuild.unrestored', ['migrations']);
+        $tables = Config::array('noria.db.rebuild.unrestored', ['migrations']);
 
         return array_values(array_filter($tables, is_string(...)));
     }
@@ -648,11 +648,11 @@ class Rebuild
     private function connectTo(array $maintenance, string $database): Connection
     {
         /** @var Connection */
-        return DB::connectUsing('platform-rebuild-'.$database, [...$maintenance, 'database' => $database], force: true);
+        return DB::connectUsing('noria-rebuild-'.$database, [...$maintenance, 'database' => $database], force: true);
     }
 
     private function release(string $database): void
     {
-        DB::purge('platform-rebuild-'.$database);
+        DB::purge('noria-rebuild-'.$database);
     }
 }

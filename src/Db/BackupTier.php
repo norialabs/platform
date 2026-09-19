@@ -18,7 +18,7 @@ enum BackupTier: string
 
     public function prefix(): string
     {
-        $prefix = Config::string('platform.db.tiers.'.$this->value.'.prefix', 'backups/'.$this->value);
+        $prefix = Config::string('noria.db.tiers.'.$this->value.'.prefix', 'backups/'.$this->value);
 
         return trim($prefix, '/');
     }
@@ -27,8 +27,8 @@ enum BackupTier: string
     public function retentionHours(): int
     {
         return match ($this) {
-            self::Hourly => max(1, Config::integer('platform.db.tiers.hourly.hours', 48)),
-            self::Daily => max(1, Config::integer('platform.db.tiers.daily.days', 30)) * 24,
+            self::Hourly => max(1, Config::integer('noria.db.tiers.hourly.hours', 48)),
+            self::Daily => max(1, Config::integer('noria.db.tiers.daily.days', 30)) * 24,
         };
     }
 }

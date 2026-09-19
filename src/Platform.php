@@ -81,18 +81,18 @@ final class Platform
      */
     public static function table(string $name): string
     {
-        $configured = Config::get('platform.tables.'.$name);
+        $configured = Config::get('noria.tables.'.$name);
 
         if (is_string($configured) && $configured !== '') {
             return $configured;
         }
 
-        return Config::string('platform.table_prefix', '').$name;
+        return Config::string('noria.table_prefix', '').$name;
     }
 
     public static function connection(): ?string
     {
-        $connection = Config::get('platform.connection');
+        $connection = Config::get('noria.connection');
 
         return is_string($connection) && $connection !== '' ? $connection : null;
     }

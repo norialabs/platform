@@ -104,10 +104,10 @@ describe('the catalogue', function (): void {
     });
 
     it('says so plainly when a product has not named its enums', function (): void {
-        config(['platform.rbac.resources' => null]);
+        config(['noria.rbac.resources' => null]);
 
         Catalog::resources();
-    })->throws(RuntimeException::class, 'platform.rbac.resources');
+    })->throws(RuntimeException::class, 'noria.rbac.resources');
 });
 
 describe('resolving what a caller may do', function (): void {

@@ -51,7 +51,7 @@ class Otp
             'channel' => $channel->value,
             'code_hash' => Hash::make($code),
             'attempts' => 0,
-            'expires_at' => Carbon::now()->addMinutes(Config::integer('platform.auth.otp.ttl', 10)),
+            'expires_at' => Carbon::now()->addMinutes(Config::integer('noria.auth.otp.ttl', 10)),
         ]);
 
         return $code;
@@ -69,7 +69,7 @@ class Otp
             return OtpOutcome::Expired;
         }
 
-        if ($challenge->attempts >= Config::integer('platform.auth.otp.attempts', 5)) {
+        if ($challenge->attempts >= Config::integer('noria.auth.otp.attempts', 5)) {
             return OtpOutcome::Exhausted;
         }
 
@@ -93,7 +93,7 @@ class Otp
      */
     public function secondsUntilNextIssue(Destination $to): ?int
     {
-        $throttle = Config::integer('platform.auth.otp.throttle', 60);
+        $throttle = Config::integer('noria.auth.otp.throttle', 60);
 
         if ($throttle <= 0) {
             return null;
@@ -139,7 +139,7 @@ class Otp
      */
     private function code(): string
     {
-        $length = max(4, Config::integer('platform.auth.otp.length', 6));
+        $length = max(4, Config::integer('noria.auth.otp.length', 6));
 
         $code = (string) random_int(1, 9);
 

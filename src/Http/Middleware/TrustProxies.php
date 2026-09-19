@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Config;
 use NoriaLabs\Platform\Http\TrustedProxies;
 
 /**
- * Laravel's own, pointed at platform.http.trusted_proxies.
+ * Laravel's own, pointed at noria.http.trusted_proxies.
  *
  * Every forwarded header is believed only from a hop on that list. Without
  * it a per-address rate limit counts the whole platform as one caller and
@@ -26,6 +26,6 @@ class TrustProxies extends Middleware
 
     public function __construct()
     {
-        $this->proxies = TrustedProxies::from(Config::get('platform.http.trusted_proxies'));
+        $this->proxies = TrustedProxies::from(Config::get('noria.http.trusted_proxies'));
     }
 }

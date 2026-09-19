@@ -84,7 +84,7 @@ class Rls
 
     public static function allowStaffRead(string $table): void
     {
-        $guc = Config::string('platform.tenancy.staff_read_guc', 'app.staff_read');
+        $guc = Config::string('noria.tenancy.staff_read_guc', 'app.staff_read');
 
         self::run(
             'create policy '.self::policy($table, 'staff_read')." on {$table} for select ".
@@ -99,11 +99,11 @@ class Rls
      */
     public static function allowPlatformWrite(string $table): void
     {
-        $guc = Config::string('platform.tenancy.platform_write_guc', 'app.platform_write');
+        $guc = Config::string('noria.tenancy.noria_write_guc', 'app.noria_write');
         $test = "current_setting('{$guc}', true) = 'on'";
 
         self::run(
-            'create policy '.self::policy($table, 'platform_write')." on {$table} for all ".
+            'create policy '.self::policy($table, 'noria_write')." on {$table} for all ".
             "using ({$test}) with check ({$test})"
         );
     }
@@ -200,14 +200,14 @@ class Rls
 
     private static function tenantPredicate(): string
     {
-        $guc = Config::string('platform.tenancy.workspace_guc', 'app.workspace_id');
+        $guc = Config::string('noria.tenancy.workspace_guc', 'app.workspace_id');
 
         return self::column()." = nullif(current_setting('{$guc}', true), '')::uuid";
     }
 
     private static function column(): string
     {
-        return Config::string('platform.tenancy.column', 'workspace_id');
+        return Config::string('noria.tenancy.column', 'workspace_id');
     }
 
     /** A policy is named for the bare table, so a schema-qualified one still gets a legal name. */

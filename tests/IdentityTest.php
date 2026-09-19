@@ -34,7 +34,7 @@ describe('a phone number', function (): void {
     });
 
     it('takes a new market from config rather than a release', function (): void {
-        config(['platform.identity.dialling_codes.ZM' => '260']);
+        config(['noria.identity.dialling_codes.ZM' => '260']);
 
         expect(Phone::normalise('0977123456', 'ZM'))->toBe('+260977123456');
     });
@@ -101,13 +101,13 @@ describe('a keyed hash', function (): void {
     });
 
     it('takes the application key when the product named none', function (): void {
-        config(['platform.identity.hash_key' => null, 'app.key' => 'base64:'.base64_encode(str_repeat('k', 32))]);
+        config(['noria.identity.hash_key' => null, 'app.key' => 'base64:'.base64_encode(str_repeat('k', 32))]);
 
         expect((new KeyedHash)->of('ada@example.com'))->toBeString();
     });
 
     it('refuses to hash with no key at all rather than with an empty one', function (): void {
-        config(['platform.identity.hash_key' => null, 'app.key' => null]);
+        config(['noria.identity.hash_key' => null, 'app.key' => null]);
 
         (new KeyedHash)->of('ada@example.com');
     })->throws(RuntimeException::class, 'needs a key');

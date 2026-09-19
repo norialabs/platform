@@ -56,7 +56,7 @@ class Invitations
             'role' => $role,
             'token_hash' => $this->hash->of($token),
             'invited_by' => $invitedBy,
-            'expires_at' => Carbon::now()->addDays(Config::integer('platform.invitations.ttl_days', 7)),
+            'expires_at' => Carbon::now()->addDays(Config::integer('noria.invitations.ttl_days', 7)),
         ]);
 
         $this->courier?->deliver($to, $channel, 'invitation', [...$context, 'token' => $token]);
@@ -92,7 +92,7 @@ class Invitations
         $hash = $this->hash->of($token);
 
         $invitation = $this->tenancy->withGuc(
-            [Config::string('platform.invitations.token_guc', 'app.invitation_token') => $hash],
+            [Config::string('noria.invitations.token_guc', 'app.invitation_token') => $hash],
             fn () => Platform::invitationModel()::query()->where('token_hash', $hash)->first(),
         );
 

@@ -15,7 +15,7 @@ use NoriaLabs\Platform\Platform;
  * The workspace a connection is currently allowed to see, held as Postgres
  * session settings that the row level security policies read.
  *
- * Every setting a policy reads has to be declared in platform.tenancy.gucs,
+ * Every setting a policy reads has to be declared in noria.tenancy.gucs,
  * because clear() resets exactly that list. Two of them widen what a
  * connection can see rather than narrowing it, and the unwind is allowed to
  * fail - so a pooled connection still holding staff_read would read every
@@ -115,7 +115,7 @@ class Tenancy
      */
     public function asStaff(Closure $callback): mixed
     {
-        return $this->withGuc([Config::string('platform.tenancy.staff_read_guc', 'app.staff_read') => 'on'], $callback);
+        return $this->withGuc([Config::string('noria.tenancy.staff_read_guc', 'app.staff_read') => 'on'], $callback);
     }
 
     /**
@@ -129,7 +129,7 @@ class Tenancy
      */
     public function asPlatform(Closure $callback): mixed
     {
-        return $this->withGuc([Config::string('platform.tenancy.platform_write_guc', 'app.platform_write') => 'on'], $callback);
+        return $this->withGuc([Config::string('noria.tenancy.noria_write_guc', 'app.noria_write') => 'on'], $callback);
     }
 
     private function restore(Closure $reset): void
@@ -175,7 +175,7 @@ class Tenancy
         // middleware and the job base. Off, it remembers the workspace and
         // writes no settings, rather than making every product that has no
         // tenants depend on Postgres.
-        if ($settings === [] || ! Config::boolean('platform.tenancy.enabled', true)) {
+        if ($settings === [] || ! Config::boolean('noria.tenancy.enabled', true)) {
             return;
         }
 
@@ -203,7 +203,7 @@ class Tenancy
     /** @return list<string> */
     private function declared(): array
     {
-        $gucs = Config::array('platform.tenancy.gucs', []);
+        $gucs = Config::array('noria.tenancy.gucs', []);
         $names = array_values(array_filter($gucs, is_string(...)));
 
         return in_array($this->workspaceGuc(), $names, true) ? $names : [$this->workspaceGuc(), ...$names];
@@ -211,7 +211,7 @@ class Tenancy
 
     private function workspaceGuc(): string
     {
-        return Config::string('platform.tenancy.workspace_guc', 'app.workspace_id');
+        return Config::string('noria.tenancy.workspace_guc', 'app.workspace_id');
     }
 
     private function connection(): Connection

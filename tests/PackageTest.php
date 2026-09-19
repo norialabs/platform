@@ -18,14 +18,14 @@ describe('naming the tables', function (): void {
     });
 
     it('prefixes every table so a host can keep them out of its own namespace', function (): void {
-        config(['platform.table_prefix' => 'noria_']);
+        config(['noria.table_prefix' => 'noria_']);
 
         expect((new AuditLog)->getTable())->toBe('noria_audit_logs');
         expect((new OtpChallenge)->getTable())->toBe('noria_otp_challenges');
     });
 
     it('renames one table without spelling out the others', function (): void {
-        config(['platform.tables.audit_logs' => 'activity']);
+        config(['noria.tables.audit_logs' => 'activity']);
 
         expect((new AuditLog)->getTable())->toBe('activity');
         expect((new OtpChallenge)->getTable())->toBe('otp_challenges');
@@ -59,13 +59,13 @@ describe('security headers', function (): void {
     });
 
     it('lets a product relax one directive without dropping the middleware', function (): void {
-        config(['platform.http.security_headers.directives.script-src' => ["'self'", 'https://cdn.example.com']]);
+        config(['noria.http.security_headers.directives.script-src' => ["'self'", 'https://cdn.example.com']]);
 
         expect(respond()->headers->get('Content-Security-Policy'))->toContain('https://cdn.example.com');
     });
 
     it('reports rather than enforces while a product is still finding its directives', function (): void {
-        config(['platform.http.security_headers.report_only' => true]);
+        config(['noria.http.security_headers.report_only' => true]);
 
         expect(respond()->headers->get('Content-Security-Policy-Report-Only'))->not->toBeNull();
         expect(respond()->headers->get('Content-Security-Policy'))->toBeNull();
@@ -80,7 +80,7 @@ describe('security headers', function (): void {
     });
 
     it('sends nothing at all when a product turns it off', function (): void {
-        config(['platform.http.security_headers.enabled' => false]);
+        config(['noria.http.security_headers.enabled' => false]);
 
         expect(respond()->headers->get('Content-Security-Policy'))->toBeNull();
     });

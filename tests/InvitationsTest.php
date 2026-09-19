@@ -138,7 +138,7 @@ describe('accepting one', function (): void {
     })->throws(InvitationOutcome::class, 'expired');
 
     it('takes its deadline from config', function (): void {
-        config(['platform.invitations.ttl_days' => 1]);
+        config(['noria.invitations.ttl_days' => 1]);
 
         app(Invitations::class)->invite(ada(), 'member');
 

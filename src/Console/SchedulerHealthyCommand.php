@@ -14,11 +14,11 @@ use Illuminate\Support\Facades\Cache;
  */
 class SchedulerHealthyCommand extends Command
 {
-    protected $signature = 'platform:scheduler-healthy';
+    protected $signature = 'noria:scheduler-healthy';
 
     protected $description = 'Exit non-zero when the scheduler has stopped firing';
 
-    public const KEY = 'platform:scheduler:heartbeat';
+    public const KEY = 'noria:scheduler:heartbeat';
 
     public function handle(): int
     {

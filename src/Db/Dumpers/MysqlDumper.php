@@ -71,12 +71,12 @@ class MysqlDumper implements DatabaseDumper
         $password = $this->value($connection, 'password', '');
         $env = $password === '' ? [] : ['MYSQL_PWD' => $password];
 
-        (new Process($command, env: $env, timeout: Config::integer('platform.db.timeout', 900)))->mustRun();
+        (new Process($command, env: $env, timeout: Config::integer('noria.db.timeout', 900)))->mustRun();
     }
 
     private function gzip(): bool
     {
-        return Config::boolean('platform.db.gzip', true);
+        return Config::boolean('noria.db.gzip', true);
     }
 
     private function withoutGzipSuffix(string $path): string

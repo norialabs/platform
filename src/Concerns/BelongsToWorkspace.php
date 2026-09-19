@@ -23,7 +23,7 @@ trait BelongsToWorkspace
     public static function bootBelongsToWorkspace(): void
     {
         static::creating(function (Model $model): void {
-            $column = Config::string('platform.tenancy.column', 'workspace_id');
+            $column = Config::string('noria.tenancy.column', 'workspace_id');
 
             if (blank($model->getAttribute($column))) {
                 $workspaceId = app(Tenancy::class)->id();
@@ -43,6 +43,6 @@ trait BelongsToWorkspace
      */
     public function scopeForWorkspace(Builder $query, string $workspaceId): Builder
     {
-        return $query->where(Config::string('platform.tenancy.column', 'workspace_id'), $workspaceId);
+        return $query->where(Config::string('noria.tenancy.column', 'workspace_id'), $workspaceId);
     }
 }

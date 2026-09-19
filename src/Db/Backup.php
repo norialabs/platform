@@ -28,7 +28,7 @@ class Backup
     /** @return array{key: string, disk: string, tier: BackupTier, bytes: int, pruned: int} */
     public function run(?string $disk = null, ?BackupTier $tier = null, ?string $connection = null): array
     {
-        $disk ??= Config::string('platform.db.disk', 'local');
+        $disk ??= Config::string('noria.db.disk', 'local');
 
         $settings = Connections::asAdmin(Connections::settings($connection));
         $dumper = $this->dumpers->make(Connections::driver($settings));
@@ -69,7 +69,7 @@ class Backup
     /** The newest dump across both tiers. */
     public function latestKey(?string $disk = null): string
     {
-        $disk ??= Config::string('platform.db.disk', 'local');
+        $disk ??= Config::string('noria.db.disk', 'local');
         $files = [];
 
         foreach (BackupTier::cases() as $tier) {
@@ -92,7 +92,7 @@ class Backup
     /** @return list<string> newest first */
     public function all(?string $disk = null, ?BackupTier $tier = null): array
     {
-        $disk ??= Config::string('platform.db.disk', 'local');
+        $disk ??= Config::string('noria.db.disk', 'local');
         $tiers = $tier === null ? BackupTier::cases() : [$tier];
         $files = [];
 
@@ -134,7 +134,7 @@ class Backup
 
     public function disk(?string $disk = null): Filesystem
     {
-        return Storage::disk($disk ?? Config::string('platform.db.disk', 'local'));
+        return Storage::disk($disk ?? Config::string('noria.db.disk', 'local'));
     }
 
     /**
@@ -144,7 +144,7 @@ class Backup
     private function dueTier(string $disk): BackupTier
     {
         $boundary = Carbon::now('UTC')->startOfDay()
-            ->addHours(max(0, min(23, Config::integer('platform.db.tiers.daily.hour', 0))));
+            ->addHours(max(0, min(23, Config::integer('noria.db.tiers.daily.hour', 0))));
 
         if (Carbon::now('UTC')->lt($boundary)) {
             return BackupTier::Hourly;
@@ -231,7 +231,7 @@ class Backup
 
     private function attempts(): int
     {
-        return max(1, Config::integer('platform.db.attempts', 3));
+        return max(1, Config::integer('noria.db.attempts', 3));
     }
 
     /** @param array<string, mixed> $settings */
@@ -252,10 +252,10 @@ class Backup
 
     public function workingDirectory(): string
     {
-        $configured = Config::get('platform.db.working_directory');
+        $configured = Config::get('noria.db.working_directory');
         $directory = is_string($configured) && $configured !== ''
             ? $configured
-            : sys_get_temp_dir().'/platform-backup';
+            : sys_get_temp_dir().'/noria-backup';
 
         if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
             throw new RuntimeException("Unable to create the backup working directory at {$directory}.");

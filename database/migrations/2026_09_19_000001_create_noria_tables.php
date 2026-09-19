@@ -21,9 +21,9 @@ return new class extends Migration
          * Both tables carry the tenant column but sit outside tenancy: the
          * trail outlives the workspace it describes, and a sign-in code is
          * read before anybody knows which workspace they are signing in to.
-         * They are in platform.tenancy.unscoped_tables for the same reason.
+         * They are in noria.tenancy.unscoped_tables for the same reason.
          */
-        $tenantColumn = Config::string('platform.tenancy.column', 'workspace_id');
+        $tenantColumn = Config::string('noria.tenancy.column', 'workspace_id');
 
         Schema::create(Platform::table('audit_logs'), function (Blueprint $table) use ($tenantColumn): void {
             $table->uuid('id')->primary();
@@ -38,7 +38,10 @@ return new class extends Migration
             $table->string('actor_type', 32)->default('user');
             $table->string('action', 128)->index();
             $table->string('target_type', 256)->nullable();
-            $table->string('target_id', 64)->nullable();
+            // 128 rather than 64: a target is not always a uuid, and a
+            // product that keys on a slug or a composite would silently
+            // truncate.
+            $table->string('target_id', 128)->nullable();
             $table->text('reason')->nullable();
             $table->jsonb('metadata')->nullable();
             $table->string('ip', 64)->nullable();

@@ -41,7 +41,7 @@ it('cannot be deleted once it is written', function (): void {
 })->throws(RuntimeException::class, 'append-only');
 
 it('does nothing at all when the product turned the trail off', function (): void {
-    config(['platform.audit.enabled' => false]);
+    config(['noria.audit.enabled' => false]);
 
     expect(app(AuditRecorder::class)->record('deal.won'))->toBeNull();
     expect(AuditLog::query()->count())->toBe(0);

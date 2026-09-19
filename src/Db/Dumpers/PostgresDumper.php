@@ -36,7 +36,7 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
             '--no-owner',
             '--no-privileges',
             '--format=plain',
-            '--compress='.max(0, min(9, Config::integer('platform.db.compression', 9))),
+            '--compress='.max(0, min(9, Config::integer('noria.db.compression', 9))),
             '--file='.$destination,
         ], 'pg_dump');
     }
@@ -69,7 +69,7 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
 
         $instruction = 'A backup needs a role that bypasses row level security: '
             ."create role <name> login password '...' nosuperuser nocreatedb nocreaterole bypassrls in role {$appRole}; "
-            .'then point platform.db.admin_connection at it.';
+            .'then point noria.db.admin_connection at it.';
 
         $probe = Connections::open('preflight', $connection);
 
@@ -194,7 +194,7 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
         $password = Connections::value($connection, 'password');
 
         $result = Process::env($password === '' ? [] : ['PGPASSWORD' => $password])
-            ->timeout(max(60, Config::integer('platform.db.timeout', 1800)))
+            ->timeout(max(60, Config::integer('noria.db.timeout', 1800)))
             ->run($command);
 
         if ($result->failed()) {

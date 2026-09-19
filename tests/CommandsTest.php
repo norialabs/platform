@@ -21,26 +21,26 @@ describe('the scheduler healthcheck', function (): void {
      * one from outside, which is the whole reason for the heartbeat.
      */
     it('fails while the scheduler has never checked in', function (): void {
-        $this->artisan('platform:scheduler-healthy')->assertFailed();
+        $this->artisan('noria:scheduler-healthy')->assertFailed();
     });
 
     it('passes once the heartbeat has run', function (): void {
-        $this->artisan('platform:scheduler-heartbeat')->assertSuccessful();
-        $this->artisan('platform:scheduler-healthy')->assertSuccessful();
+        $this->artisan('noria:scheduler-heartbeat')->assertSuccessful();
+        $this->artisan('noria:scheduler-healthy')->assertSuccessful();
     });
 
     it('fails again once the heartbeat has gone stale', function (): void {
-        $this->artisan('platform:scheduler-heartbeat')->assertSuccessful();
+        $this->artisan('noria:scheduler-heartbeat')->assertSuccessful();
 
         Cache::forget(SchedulerHealthyCommand::KEY);
 
-        $this->artisan('platform:scheduler-healthy')->assertFailed();
+        $this->artisan('noria:scheduler-healthy')->assertFailed();
     });
 
     it('holds the beat for longer than the minute it is scheduled at', function (): void {
-        config(['platform.scheduler.heartbeat_ttl' => 300]);
+        config(['noria.scheduler.heartbeat_ttl' => 300]);
 
-        $this->artisan('platform:scheduler-heartbeat')->assertSuccessful();
+        $this->artisan('noria:scheduler-heartbeat')->assertSuccessful();
 
         expect(Cache::get(SchedulerHealthyCommand::KEY))->not->toBeNull();
     });
@@ -52,7 +52,7 @@ describe('pruning sign-in codes', function (): void {
 
         $this->travel(30)->days();
 
-        $this->artisan('platform:prune-otp', ['--days' => 7])->assertSuccessful();
+        $this->artisan('noria:prune-otp', ['--days' => 7])->assertSuccessful();
 
         expect(OtpChallenge::query()->count())->toBe(0);
     });
@@ -60,7 +60,7 @@ describe('pruning sign-in codes', function (): void {
     it('leaves a code still worth keeping', function (): void {
         app(Otp::class)->issue(address());
 
-        $this->artisan('platform:prune-otp')->assertSuccessful();
+        $this->artisan('noria:prune-otp')->assertSuccessful();
 
         expect(OtpChallenge::query()->count())->toBe(1);
     });
@@ -78,14 +78,14 @@ describe('the tenancy check', function (): void {
      * suite deliberately runs as a role that cannot bypass a policy.
      */
     it('passes on a database whose role cannot step around a policy', function (): void {
-        $this->artisan('platform:tenancy-check')->assertSuccessful();
+        $this->artisan('noria:tenancy-check')->assertSuccessful();
     });
 
     it('names a tenant table nobody protected', function (): void {
         DB::statement('create table unguarded (id uuid primary key, workspace_id uuid)');
 
         try {
-            $this->artisan('platform:tenancy-check')
+            $this->artisan('noria:tenancy-check')
                 ->expectsOutputToContain('unguarded')
                 ->assertFailed();
         } finally {
@@ -97,9 +97,9 @@ describe('the tenancy check', function (): void {
 describe('the backup commands', function (): void {
     it('says there is nothing to restore rather than failing obscurely', function (): void {
         Storage::fake('backups');
-        config(['platform.db.disk' => 'backups']);
+        config(['noria.db.disk' => 'backups']);
 
-        $this->artisan('platform:restore', ['--force' => true])->assertFailed();
+        $this->artisan('noria:restore', ['--force' => true])->assertFailed();
     });
 
     it('refuses a driver it has no dumper for', function (): void {
@@ -107,19 +107,19 @@ describe('the backup commands', function (): void {
             'database.connections.oracle_probe' => ['driver' => 'oracle', 'database' => 'x'],
         ]);
 
-        $this->artisan('platform:backup', ['--connection' => 'oracle_probe']);
+        $this->artisan('noria:backup', ['--connection' => 'oracle_probe']);
     })->throws(RuntimeException::class, 'oracle');
 
     it('refuses to rebuild production unless told twice', function (): void {
         app()->detectEnvironment(fn (): string => 'production');
 
-        $this->artisan('platform:rebuild')->assertFailed();
+        $this->artisan('noria:rebuild')->assertFailed();
     });
 });
 
 describe('the static error pages', function (): void {
     beforeEach(function (): void {
-        config(['platform.errors.stylesheet' => null, 'platform.errors.codes' => [502]]);
+        config(['noria.errors.stylesheet' => null, 'noria.errors.codes' => [502]]);
     });
 
     afterEach(function (): void {
@@ -136,30 +136,30 @@ describe('the static error pages', function (): void {
      */
     it('writes a file the edge can serve without the application', function (): void {
         app('view')->addNamespace('errors', __DIR__.'/Fixtures/views');
-        config(['platform.errors.view' => 'errors::']);
+        config(['noria.errors.view' => 'errors::']);
 
-        $this->artisan('platform:build-error-pages')->assertSuccessful();
+        $this->artisan('noria:build-error-pages')->assertSuccessful();
 
         expect(file_get_contents(public_path('502.html')))->toContain('Bad gateway');
     });
 
     it('says which view is missing rather than writing an empty page', function (): void {
-        config(['platform.errors.view' => 'nowhere.']);
+        config(['noria.errors.view' => 'nowhere.']);
 
-        $this->artisan('platform:build-error-pages')->assertFailed();
+        $this->artisan('noria:build-error-pages')->assertFailed();
 
         expect(is_file(public_path('502.html')))->toBeFalse();
     });
 
     it('refuses when the stylesheet it would inline is not built', function (): void {
-        config(['platform.errors.stylesheet' => 'resources/css/nothing.css']);
+        config(['noria.errors.stylesheet' => 'resources/css/nothing.css']);
 
-        $this->artisan('platform:build-error-pages')->assertFailed();
+        $this->artisan('noria:build-error-pages')->assertFailed();
     });
 
     it('does nothing when a product configured no pages', function (): void {
-        config(['platform.errors.codes' => []]);
+        config(['noria.errors.codes' => []]);
 
-        $this->artisan('platform:build-error-pages')->assertSuccessful();
+        $this->artisan('noria:build-error-pages')->assertSuccessful();
     });
 });

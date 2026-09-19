@@ -40,7 +40,7 @@ final class KeyedHash
             return $this->key;
         }
 
-        $configured = Config::get('platform.identity.hash_key');
+        $configured = Config::get('noria.identity.hash_key');
 
         if (is_string($configured) && $configured !== '') {
             return $configured;
@@ -53,7 +53,7 @@ final class KeyedHash
         }
 
         throw new RuntimeException(
-            'A keyed hash needs a key: set platform.identity.hash_key, or the application key.'
+            'A keyed hash needs a key: set noria.identity.hash_key, or the application key.'
         );
     }
 }

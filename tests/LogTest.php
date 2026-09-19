@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use NoriaLabs\Platform\Contracts\LogContext;
 use NoriaLabs\Platform\Log\Logger;
 use NoriaLabs\Platform\Log\Redactor;
+use NoriaLabs\Platform\Tests\Fixtures\StubLogContext;
 
 describe('redacting a payload', function (): void {
     it('masks a password rather than printing it', function (): void {
@@ -57,7 +59,7 @@ describe('redacting a payload', function (): void {
 
     /* A field sensitive in one product is sensitive everywhere the log ends up. */
     it('adds what a product declares, however the product spelled it', function (): void {
-        config(['platform.log.pii_keys' => ['kraPin']]);
+        config(['noria.log.pii_keys' => ['kraPin']]);
 
         expect(Redactor::sensitive('kra_pin'))->toBeTrue();
         expect(Redactor::sensitive('krapin'))->toBeTrue();
@@ -101,5 +103,150 @@ describe('writing a log line', function (): void {
         );
 
         Logger::exception('backup failed', new RuntimeException('disk full'));
+    });
+});
+
+describe('a channel the product defined', function (): void {
+    /*
+     * Hardcoding the channel list would mean a product with its own could
+     * not use this at all, and reaching for Log:: instead is how a payload
+     * gets logged unscrubbed.
+     */
+    it('writes to any channel the product named', function (): void {
+        config(['logging.channels.transactions' => ['driver' => 'null']]);
+
+        Log::shouldReceive('channel')->once()->with('transactions')->andReturnSelf();
+        Log::shouldReceive('log')->once();
+
+        Logger::create('transactions', 'a payment settled', ['reference' => 'INV-1']);
+    });
+
+    it('scrubs a named channel like any other', function (): void {
+        Log::shouldReceive('log')->once()->withArgs(
+            fn (string $level, string $message, array $context): bool => ! str_contains((string) $context['password'], 'hunter2')
+        );
+
+        Logger::create('errors', 'something went wrong', ['password' => 'hunter2secret']);
+    });
+
+    it('defaults a named channel to info and takes a level when given one', function (): void {
+        Log::shouldReceive('log')->once()->with('info', 'one', [])->andReturnNull();
+        Log::shouldReceive('log')->once()->with('warning', 'two', [])->andReturnNull();
+
+        Logger::create('errors', 'one');
+        Logger::create('errors', 'two', [], 'warning');
+    });
+
+    it('records an exception at the level the caller chose', function (): void {
+        Log::shouldReceive('log')->once()->withArgs(
+            fn (string $level): bool => $level === 'warning'
+        );
+
+        Logger::exception('could not prune', new RuntimeException('gone'), [], 'warning');
+    });
+});
+
+describe('what must not be touched', function (): void {
+    /*
+     * A provider's own document is evidence. Masking a field inside it
+     * makes the record disagree with what the provider sent, and a
+     * reconciliation against it then fails for the wrong reason.
+     */
+    it('keeps a provider payload exactly as it arrived', function (): void {
+        $scrubbed = Redactor::scrub([
+            'password' => 'hunter2secret',
+            'payload' => ['phone' => '254712345678', 'token' => 'abcdef123456'],
+        ]);
+
+        expect($scrubbed['password'])->not->toContain('hunter2');
+        expect($scrubbed['payload'])->toBe(['phone' => '254712345678', 'token' => 'abcdef123456']);
+    });
+
+    it('keeps a payload whole however deep the nesting goes', function (): void {
+        $scrubbed = Redactor::scrub(['payload' => ['body' => ['secret' => 'keep-me']]]);
+
+        expect($scrubbed['payload']['body']['secret'])->toBe('keep-me');
+    });
+
+    /*
+     * An exemption list a product cannot close is a hole. 'payload' is a
+     * common column name, and one holding user input has to be scrubbable.
+     */
+    it('lets a product replace the default rather than only add to it', function (): void {
+        config(['noria.log.verbatim_keys' => ['raw_response']]);
+
+        $scrubbed = Redactor::scrub(['raw_response' => ['token' => 'keep-me'], 'payload' => ['token' => 'abcdef123456']]);
+
+        expect($scrubbed['raw_response']['token'])->toBe('keep-me');
+        expect($scrubbed['payload']['token'])->not->toBe('abcdef123456');
+    });
+
+    it('keeps sensitivity lists additive, because those are not holes', function (): void {
+        config(['noria.log.pii_keys' => ['kraPin']]);
+
+        expect(Redactor::sensitive('kra_pin'))->toBeTrue();
+        expect(Redactor::sensitive('password'))->toBeTrue();
+    });
+});
+
+describe('an address in the context', function (): void {
+    /* A token in a query string is a token. */
+    it('drops the query string and keeps the path', function (): void {
+        expect(Redactor::scrub(['callback_url' => 'https://example.com/hook?token=secret123'])['callback_url'])
+            ->toBe('https://example.com/hook');
+    });
+
+    it('recognises the other names an address goes by', function (string $key): void {
+        expect(Redactor::scrub([$key => 'https://example.com/x?t=1'])[$key])->toBe('https://example.com/x');
+    })->with(['callback_url', 'webhook_uri', 'result_endpoint', 'timeout_callback']);
+
+    it('leaves an address with nothing to drop alone', function (): void {
+        expect(Redactor::scrub(['url' => 'https://example.com/hook'])['url'])->toBe('https://example.com/hook');
+    });
+
+    it('leaves an ordinary string alone however it ends', function (): void {
+        expect(Redactor::scrub(['title' => 'a?b'])['title'])->toBe('a?b');
+    });
+});
+
+describe('ambient context', function (): void {
+    it('adds nothing when the product bound no context', function (): void {
+        Log::shouldReceive('log')->once()->with('info', 'a line', [])->andReturnNull();
+
+        Logger::app('a line');
+    });
+
+    /* A line joined to a request afterwards is worth far more than one that is not. */
+    it('carries what the product says every line should carry', function (): void {
+        app()->bind(LogContext::class, StubLogContext::class);
+
+        Log::shouldReceive('log')->once()->withArgs(
+            fn (string $level, string $message, array $context): bool => $context['request_id'] === 'req-1'
+        );
+
+        Logger::app('a line');
+    });
+
+    it('lets the caller override an ambient key, knowing more than the request does', function (): void {
+        app()->bind(LogContext::class, StubLogContext::class);
+
+        Log::shouldReceive('log')->once()->withArgs(
+            fn (string $level, string $message, array $context): bool => $context['path'] === 'from-the-caller'
+        );
+
+        Logger::app('a line', ['path' => 'from-the-caller']);
+    });
+
+    it('scrubs the ambient context like any other', function (): void {
+        StubLogContext::$context = ['email' => 'ada@example.com'];
+        app()->bind(LogContext::class, StubLogContext::class);
+
+        Log::shouldReceive('log')->once()->withArgs(
+            fn (string $level, string $message, array $context): bool => ! str_contains((string) $context['email'], 'ada@example.com')
+        );
+
+        Logger::app('a line');
+
+        StubLogContext::$context = ['request_id' => 'req-1', 'path' => 'invoices'];
     });
 });
