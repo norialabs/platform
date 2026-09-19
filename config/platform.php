@@ -136,6 +136,17 @@ return [
         'heartbeat_ttl' => (int) env('PLATFORM_HEARTBEAT_TTL', 300),
     ],
 
+    /*
+     * A 502 or a 504 means the application is not answering, so the page
+     * for it cannot be rendered by the application and its stylesheet
+     * cannot be fetched either. Both are baked in ahead of time.
+     */
+    'errors' => [
+        'codes' => [502, 504],
+        'view' => env('PLATFORM_ERROR_VIEW', 'errors.'),
+        'stylesheet' => env('PLATFORM_ERROR_STYLESHEET', 'resources/css/app.css'),
+    ],
+
     'money' => [
         'currency' => env('PLATFORM_CURRENCY', 'KES'),
         'minor_units' => (int) env('PLATFORM_CURRENCY_MINOR_UNITS', 2),

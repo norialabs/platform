@@ -3,12 +3,15 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Auth\Otp;
 use NoriaLabs\Platform\Auth\OtpChallenge;
 use NoriaLabs\Platform\Auth\OtpOutcome;
 use NoriaLabs\Platform\Auth\OtpThrottled;
+use NoriaLabs\Platform\Auth\PersonalAccessToken;
 use NoriaLabs\Platform\Auth\ProviderProfile;
 use NoriaLabs\Platform\Auth\SocialState;
+use NoriaLabs\Platform\Auth\UnscopedToken;
 use NoriaLabs\Platform\Identity\Destination;
 use NoriaLabs\Platform\Platform;
 use NoriaLabs\Platform\Tests\Fixtures\HostOtpChallenge;
@@ -263,4 +266,67 @@ describe('substituting the model', function (): void {
     it('refuses a substitute that is not a sign-in code', function (): void {
         Platform::useOtpChallengeModel(stdClass::class);
     })->throws(InvalidArgumentException::class);
+});
+
+describe('a workspace scoped token', function (): void {
+    beforeEach(function (): void {
+        Schema::create('personal_access_tokens', function ($table): void {
+            $table->uuid('id')->primary();
+            $table->uuid('workspace_id')->nullable();
+            $table->uuidMorphs('tokenable');
+            $table->string('name');
+            $table->string('token', 64)->unique();
+            $table->text('abilities')->nullable();
+            $table->timestamp('last_used_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
+            $table->timestamps();
+        });
+    });
+
+    function mint(array $abilities): PersonalAccessToken
+    {
+        return PersonalAccessToken::query()->create([
+            'tokenable_type' => 'user',
+            'tokenable_id' => '01a0b000-0000-7000-8000-000000000001',
+            'name' => 'a token',
+            'token' => hash('sha256', (string) random_int(1, PHP_INT_MAX)),
+            'abilities' => $abilities,
+        ]);
+    }
+
+    it('writes the workspace its abilities name into a column of its own', function (): void {
+        $token = mint(['workspace:01a0b000-0000-7000-8000-00000000000a', 'invoice:view']);
+
+        expect($token->workspace_id)->toBe('01a0b000-0000-7000-8000-00000000000a');
+    });
+
+    /*
+     * Enforced on the model rather than at the caller, so no controller,
+     * job or command can mint a token spanning every workspace by
+     * forgetting a line.
+     */
+    it('refuses to be written at all when it names no workspace', function (): void {
+        mint(['invoice:view']);
+    })->throws(UnscopedToken::class);
+
+    it('refuses to be written when it names two', function (): void {
+        mint([
+            'workspace:01a0b000-0000-7000-8000-00000000000a',
+            'workspace:01a0b000-0000-7000-8000-00000000000b',
+        ]);
+    })->throws(UnscopedToken::class);
+
+    it('refuses a workspace that is not an identifier', function (): void {
+        mint(['workspace:all-of-them']);
+    })->throws(UnscopedToken::class);
+
+    it('leaves no unscoped row behind after refusing one', function (): void {
+        try {
+            mint(['invoice:view']);
+        } catch (UnscopedToken) {
+            // The point is what the table holds afterwards.
+        }
+
+        expect(PersonalAccessToken::query()->count())->toBe(0);
+    });
 });

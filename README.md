@@ -149,6 +149,21 @@ somebody is a link. Single use, keyed by hash. `ProviderProfile` normalises what
 keeps no provider token; `email_verified` and `verified_email` are the same answer and absent
 means no.
 
+### Tokens
+
+`PersonalAccessToken` is Sanctum's, carrying a real tenant column. The workspace is parsed out of
+the abilities on the way in, and **a token that names none never reaches the table** - enforced on
+the model rather than at the caller, so no controller, job or command can mint a token spanning
+every workspace by forgetting a line. A token naming two workspaces is as unscoped as one naming
+none.
+
+`TokenAbilities` is the vocabulary: one `workspace:{uuid}`, then `{resource}:{action}` pairs the
+catalogue supports, or `*`. `TokenCeiling` reads those abilities as a `Permissions` document and
+is the `PermissionCeiling` most products want - a token narrows a role and can never widen one.
+
+Register it yourself with `Sanctum::usePersonalAccessTokenModel()`; the package does not, because
+a product may not use Sanctum at all. Sanctum is a suggested dependency, not a required one.
+
 ### Invitations
 
 One open invitation per destination, a hashed single-use token, a deadline, and the answer that
@@ -209,6 +224,12 @@ directive without dropping the middleware. `TrustedProxies` returns null by defa
 `*`: a container reached only through its own proxy should say so, and one that is not should not
 believe forwarded headers at all.
 
+### Errors
+
+`platform:build-error-pages` renders the gateway views to static files the edge can serve. A 502
+or a 504 means the application is not answering, so the page for it cannot be rendered by the
+application and its stylesheet cannot be fetched either - both are baked in ahead of time.
+
 ### Money
 
 Integers throughout: a float cannot hold a third of a shilling and a sum of floats does not
@@ -240,6 +261,7 @@ export, padded and duplicated headers - and yields rows numbered the way the spr
 | Tables a rebuild does not carry | `platform.db.rebuild.unrestored` |
 | Checks a rebuild ends on | `platform.db.rebuild.verify_commands` |
 | OTP length, TTL, attempts, resend wait | `platform.auth.otp.*` |
+| Static error page codes, view, stylesheet | `platform.errors.*` |
 | Extra redaction keys | `platform.log.*` |
 | Trusted proxies | `platform.http.trusted_proxies` + the `TrustProxies` middleware |
 | Scheduler heartbeat window | `platform.scheduler.heartbeat_ttl` |

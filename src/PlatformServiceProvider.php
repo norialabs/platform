@@ -15,6 +15,7 @@ use NoriaLabs\Platform\Audit\RequestContext;
 use NoriaLabs\Platform\Auth\Otp;
 use NoriaLabs\Platform\Auth\SocialState;
 use NoriaLabs\Platform\Console\BackupCommand;
+use NoriaLabs\Platform\Console\BuildErrorPagesCommand;
 use NoriaLabs\Platform\Console\PruneOtpCommand;
 use NoriaLabs\Platform\Console\RebuildCommand;
 use NoriaLabs\Platform\Console\RestoreCommand;
@@ -84,6 +85,7 @@ class PlatformServiceProvider extends ServiceProvider
                 SchedulerHealthyCommand::class,
                 SchedulerHeartbeatCommand::class,
                 RebuildCommand::class,
+                BuildErrorPagesCommand::class,
             ]);
 
             $this->publishes([

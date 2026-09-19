@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Auth\User;
 use Illuminate\Support\Facades\Gate;
+use NoriaLabs\Platform\Auth\TokenAbilities;
+use NoriaLabs\Platform\Auth\TokenCeiling;
 use NoriaLabs\Platform\PlatformServiceProvider;
 use NoriaLabs\Platform\Rbac\Catalog;
 use NoriaLabs\Platform\Rbac\PermissionResolver;
@@ -14,6 +16,7 @@ use NoriaLabs\Platform\Tests\Fixtures\StubCeiling;
 use NoriaLabs\Platform\Tests\Fixtures\StubPrincipal;
 use NoriaLabs\Platform\Tests\Fixtures\StubPrincipals;
 use NoriaLabs\Platform\Tests\Fixtures\StubRoles;
+use NoriaLabs\Platform\Tests\Fixtures\TokenHolder;
 
 beforeEach(function (): void {
     StubPrincipals::$principal = null;
@@ -160,5 +163,83 @@ describe('resolving what a caller may do', function (): void {
 
         expect(Gate::forUser($user)->allows(PlatformServiceProvider::GATE, [Resource::Invoice, Action::View]))->toBeTrue();
         expect(Gate::forUser($user)->allows(PlatformServiceProvider::GATE, [Resource::Invoice, Action::Delete]))->toBeFalse();
+    });
+});
+
+describe('a token as a ceiling', function (): void {
+    /*
+     * A token narrows a role and can never widen one, so the abilities are
+     * read as a permission document and applied over whatever the roles
+     * granted.
+     */
+    it('allows only what the abilities name', function (): void {
+        $user = new TokenHolder(['workspace:01a0b000-0000-7000-8000-00000000000a', 'invoice:view']);
+
+        $ceiling = (new TokenCeiling)->for($user);
+
+        expect($ceiling?->has(Resource::Invoice, Action::View))->toBeTrue();
+        expect($ceiling?->has(Resource::Invoice, Action::Delete))->toBeFalse();
+    });
+
+    it('allows everything for a token that says so', function (): void {
+        expect((new TokenCeiling)->for(new TokenHolder(['*']))?->grantsEverything())->toBeTrue();
+    });
+
+    /* A person at a keyboard is bounded by their roles alone. */
+    it('imposes no ceiling on somebody who arrived by session', function (): void {
+        expect((new TokenCeiling)->for(new TokenHolder(null)))->toBeNull();
+    });
+
+    it('ignores the workspace scope, which is not a permission', function (): void {
+        $ceiling = (new TokenCeiling)->for(new TokenHolder(['workspace:01a0b000-0000-7000-8000-00000000000a']));
+
+        expect($ceiling?->isEmpty())->toBeTrue();
+    });
+
+    it('ignores an ability naming something the product does not have', function (): void {
+        $ceiling = (new TokenCeiling)->for(new TokenHolder(['spaceship:launch', 'invoice:view']));
+
+        expect($ceiling?->has(Resource::Invoice, Action::View))->toBeTrue();
+        expect($ceiling?->toArray())->toBe(['invoice' => ['view']]);
+    });
+});
+
+describe('the token vocabulary', function (): void {
+    it('reads the one workspace a token is for', function (): void {
+        expect(TokenAbilities::workspaceIn(['workspace:01A0B000-0000-7000-8000-00000000000A', 'invoice:view']))
+            ->toBe('01a0b000-0000-7000-8000-00000000000a');
+    });
+
+    /* A token naming two workspaces is as unscoped as one naming none. */
+    it('reads no workspace from a token that names two', function (): void {
+        expect(TokenAbilities::workspaceIn([
+            'workspace:01a0b000-0000-7000-8000-00000000000a',
+            'workspace:01a0b000-0000-7000-8000-00000000000b',
+        ]))->toBeNull();
+    });
+
+    it('reads no workspace from a token that names none', function (): void {
+        expect(TokenAbilities::workspaceIn(['invoice:view']))->toBeNull();
+    });
+
+    it('reads no workspace from something that is not one', function (): void {
+        expect(TokenAbilities::workspaceIn(['workspace:not-a-uuid']))->toBeNull();
+    });
+
+    it('accepts an ability the catalogue supports and refuses one it does not', function (): void {
+        expect(TokenAbilities::isValid('invoice:view'))->toBeTrue();
+        expect(TokenAbilities::isValid('*'))->toBeTrue();
+        expect(TokenAbilities::isValid('workspace:01a0b000-0000-7000-8000-00000000000a'))->toBeTrue();
+
+        expect(TokenAbilities::isValid('report:delete'))->toBeFalse();
+        expect(TokenAbilities::isValid('spaceship:launch'))->toBeFalse();
+        expect(TokenAbilities::isValid('nonsense'))->toBeFalse();
+    });
+
+    it('writes an ability the catalogue will accept back', function (): void {
+        $ability = TokenAbilities::permission(Resource::Invoice, Action::View);
+
+        expect($ability)->toBe('invoice:view');
+        expect(TokenAbilities::isValid($ability))->toBeTrue();
     });
 });

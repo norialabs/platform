@@ -116,3 +116,50 @@ describe('the backup commands', function (): void {
         $this->artisan('platform:rebuild')->assertFailed();
     });
 });
+
+describe('the static error pages', function (): void {
+    beforeEach(function (): void {
+        config(['platform.errors.stylesheet' => null, 'platform.errors.codes' => [502]]);
+    });
+
+    afterEach(function (): void {
+        foreach ([502, 504] as $code) {
+            if (is_file(public_path("{$code}.html"))) {
+                unlink(public_path("{$code}.html"));
+            }
+        }
+    });
+
+    /*
+     * A 502 means the application is not answering, so the page for it
+     * cannot be rendered by the application when it is needed.
+     */
+    it('writes a file the edge can serve without the application', function (): void {
+        app('view')->addNamespace('errors', __DIR__.'/Fixtures/views');
+        config(['platform.errors.view' => 'errors::']);
+
+        $this->artisan('platform:build-error-pages')->assertSuccessful();
+
+        expect(file_get_contents(public_path('502.html')))->toContain('Bad gateway');
+    });
+
+    it('says which view is missing rather than writing an empty page', function (): void {
+        config(['platform.errors.view' => 'nowhere.']);
+
+        $this->artisan('platform:build-error-pages')->assertFailed();
+
+        expect(is_file(public_path('502.html')))->toBeFalse();
+    });
+
+    it('refuses when the stylesheet it would inline is not built', function (): void {
+        config(['platform.errors.stylesheet' => 'resources/css/nothing.css']);
+
+        $this->artisan('platform:build-error-pages')->assertFailed();
+    });
+
+    it('does nothing when a product configured no pages', function (): void {
+        config(['platform.errors.codes' => []]);
+
+        $this->artisan('platform:build-error-pages')->assertSuccessful();
+    });
+});
