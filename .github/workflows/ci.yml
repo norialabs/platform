@@ -15,7 +15,10 @@ jobs:
     # Without both they skip, which passes while proving nothing.
     services:
       postgres:
-        image: postgres:17
+        # Pinned to the major the runner's pg_dump speaks. pg_dump refuses a
+        # server newer than itself, and the dump and restore tests shell out to
+        # whatever is on PATH. Bump both together, never one alone.
+        image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -47,6 +50,22 @@ jobs:
 
       - name: Run static analysis
         run: ./vendor/bin/phpstan analyse --no-progress
+
+      # A mismatch here fails three tests a long way from the cause, so say so
+      # up front rather than in a pg_dump stack trace.
+      - name: Confirm the client can dump this server
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          CLIENT=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
+          SERVER=$(psql -h 127.0.0.1 -U postgres -tAc 'show server_version' | grep -oE '^[0-9]+')
+          echo "pg_dump major $CLIENT against server major $SERVER"
+          if [ "$CLIENT" -lt "$SERVER" ]; then
+            echo "pg_dump $CLIENT cannot dump a server on $SERVER."
+            echo "Pin the postgres service image back to $CLIENT, or install a newer client."
+            exit 1
+          fi
 
       # platform_test cannot bypass row level security, so the policies are
       # actually under test. platform_admin can, which is what the dump and
