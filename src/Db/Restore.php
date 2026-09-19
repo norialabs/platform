@@ -6,10 +6,11 @@ namespace NoriaLabs\Platform\Db;
 
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config;
+use NoriaLabs\Platform\Contracts\DatabaseMaintainer;
 use RuntimeException;
 
 /**
- * Reads a dump back over a database.
+ * Reads a dump back over a database, optionally one it makes first.
  *
  * Refuses in production unless the caller says so out loud, because the
  * command that restores last night's data over today's is the same command
@@ -22,48 +23,149 @@ class Restore
         private Backup $backups,
     ) {}
 
-    public function run(string $path, ?string $connection = null, bool $force = false): void
-    {
+    /** @return array{key: string, disk: string, database: string, created: bool, bytes: int, dropped: int} */
+    public function run(
+        ?string $key = null,
+        ?string $disk = null,
+        ?string $database = null,
+        ?string $connection = null,
+        bool $force = false,
+    ): array {
         if (App::isProduction() && ! $force) {
             throw new RuntimeException('Refusing to restore over production without an explicit force.');
         }
 
-        $connection ??= Config::string('database.default');
-        /** @var array<string, mixed> $settings */
-        $settings = Config::array('database.connections.'.$connection);
-        $driver = is_string($settings['driver'] ?? null) ? $settings['driver'] : '';
+        $disk ??= Config::string('platform.db.disk', 'local');
 
-        $disk = $this->backups->disk();
+        $settings = Connections::settings($connection);
+        $appRole = Connections::value($settings, 'username');
+        $settings = Connections::asAdmin($settings);
 
-        if (! $disk->exists($path)) {
-            throw new RuntimeException("No backup at [{$path}].");
+        $dumper = $this->dumpers->make(Connections::driver($settings));
+        $created = false;
+
+        // Restoring beside the live database rather than over it: a
+        // rehearsal that proves the dump before anybody bets on it.
+        if ($database !== null && $database !== Connections::value($settings, 'database')) {
+            if (! $dumper instanceof DatabaseMaintainer) {
+                throw new RuntimeException('This driver cannot restore into a database of its own.');
+            }
+
+            $created = $dumper->ensureDatabase($settings, $database, $appRole);
+            $settings['database'] = $database;
+
+            if ($created) {
+                $dumper->grantSchema($settings, $appRole);
+            }
         }
 
-        $local = tempnam(sys_get_temp_dir(), 'platform-restore-').'.'.pathinfo($path, PATHINFO_EXTENSION);
-        $stream = $disk->readStream($path);
+        $key ??= $this->backups->latestKey($disk);
 
-        if ($stream === null) {
-            throw new RuntimeException("The backup at [{$path}] could not be read.");
-        }
-
-        $target = fopen($local, 'w');
-
-        if ($target === false) {
-            throw new RuntimeException('A local copy of the backup could not be written.');
-        }
-
-        stream_copy_to_stream($stream, $target);
-        fclose($target);
-        fclose($stream);
+        $stamp = substr(bin2hex(random_bytes(3)), 0, 6);
+        $archive = $this->backups->workingDirectory()."/restore-{$stamp}.sql.gz";
+        $plain = $this->backups->workingDirectory()."/restore-{$stamp}.sql";
 
         try {
-            $this->dumpers->make($driver)->restore($settings, $local);
+            $bytes = $this->download($disk, $key, $archive);
+            $source = $this->expand($archive, $plain);
+
+            $dropped = $dumper instanceof DatabaseMaintainer ? $dumper->dropExisting($settings) : 0;
+
+            $dumper->restore($settings, $source);
+
+            return [
+                'key' => $key,
+                'disk' => $disk,
+                'database' => Connections::value($settings, 'database'),
+                'created' => $created,
+                'bytes' => $bytes,
+                'dropped' => $dropped,
+            ];
         } finally {
-            foreach ([$local, preg_replace('/\.gz$/', '', $local)] as $candidate) {
-                if (is_string($candidate) && is_file($candidate)) {
-                    unlink($candidate);
+            foreach ([$archive, $plain] as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
                 }
             }
         }
+    }
+
+    private function download(string $disk, string $key, string $destination): int
+    {
+        $filesystem = $this->backups->disk($disk);
+
+        if (! $filesystem->exists($key)) {
+            throw new RuntimeException("Disk [{$disk}] has no object at [{$key}].");
+        }
+
+        $source = $filesystem->readStream($key);
+
+        if (! is_resource($source)) {
+            throw new RuntimeException("Disk [{$disk}] would not open [{$key}] for reading.");
+        }
+
+        $target = @fopen($destination, 'wb');
+
+        if ($target === false) {
+            fclose($source);
+
+            throw new RuntimeException("Unable to write the download to {$destination}.");
+        }
+
+        try {
+            stream_copy_to_stream($source, $target);
+        } finally {
+            fclose($source);
+            fclose($target);
+        }
+
+        $bytes = (int) @filesize($destination);
+
+        if ($bytes === 0) {
+            throw new RuntimeException("The dump at [{$key}] is empty.");
+        }
+
+        return $bytes;
+    }
+
+    /** @return string the path the engine should read, expanded where it was compressed */
+    private function expand(string $archive, string $destination): string
+    {
+        if (! str_ends_with($archive, '.gz')) {
+            return $archive;
+        }
+
+        $source = @gzopen($archive, 'rb');
+
+        if ($source === false) {
+            throw new RuntimeException("Unable to read the dump at {$archive}.");
+        }
+
+        $target = @fopen($destination, 'wb');
+
+        if ($target === false) {
+            gzclose($source);
+
+            throw new RuntimeException("Unable to write the expanded dump to {$destination}.");
+        }
+
+        try {
+            // Chunked rather than read whole: a dump is routinely larger
+            // than the worker's memory limit.
+            while (! gzeof($source)) {
+                $chunk = gzread($source, 262_144);
+
+                if ($chunk === false) {
+                    throw new RuntimeException("Unable to expand the dump at {$archive}.");
+                }
+
+                fwrite($target, $chunk);
+            }
+        } finally {
+            gzclose($source);
+            fclose($target);
+        }
+
+        return $destination;
     }
 }

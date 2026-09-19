@@ -5,42 +5,49 @@ declare(strict_types=1);
 namespace NoriaLabs\Platform\Console;
 
 use Illuminate\Console\Command;
-use NoriaLabs\Platform\Db\Backup;
 use NoriaLabs\Platform\Db\Restore;
 
 class RestoreCommand extends Command
 {
     protected $signature = 'platform:restore
-        {path? : The backup to read, newest when omitted}
+        {key? : The backup to read, newest across both tiers when omitted}
+        {--disk= : The filesystem disk to read from}
+        {--database= : Restore into this database instead, creating it if needed}
         {--connection= : The database connection to restore into}
-        {--force : Allow this to run in production}';
+        {--force : Allow this to run in production, and skip the prompt}';
 
-    protected $description = 'Read a backup back over a database';
+    protected $description = 'Read a backup back over a database, or beside it';
 
-    public function handle(Backup $backups, Restore $restore): int
+    public function handle(Restore $restore): int
     {
-        $path = $this->argument('path');
+        $key = $this->argument('key');
+        $key = is_string($key) && $key !== '' ? $key : null;
+        $into = $this->text('database');
 
-        if (! is_string($path) || $path === '') {
-            $path = $backups->all()[0] ?? null;
-        }
-
-        if (! is_string($path)) {
-            $this->components->error('There are no backups to restore.');
-
+        if (! $this->option('force') && ! $this->confirm('Restore over '.($into ?? 'the current database').'?', false)) {
             return self::FAILURE;
         }
 
-        if (! $this->option('force') && ! $this->confirm("Restore {$path} over the database?", false)) {
-            return self::FAILURE;
-        }
+        $result = $restore->run(
+            $key,
+            $this->text('disk'),
+            $into,
+            $this->text('connection'),
+            (bool) $this->option('force'),
+        );
 
-        $connection = $this->option('connection');
-
-        $restore->run($path, is_string($connection) && $connection !== '' ? $connection : null, (bool) $this->option('force'));
-
-        $this->components->info('Restored from '.$path);
+        $this->components->twoColumnDetail('Key', $result['key']);
+        $this->components->twoColumnDetail('Database', $result['database'].($result['created'] ? ' (created)' : ''));
+        $this->components->twoColumnDetail('Dropped', (string) $result['dropped'].' tables');
+        $this->components->twoColumnDetail('Size', sprintf('%.1f MB', $result['bytes'] / 1_048_576));
 
         return self::SUCCESS;
+    }
+
+    private function text(string $option): ?string
+    {
+        $value = $this->option($option);
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

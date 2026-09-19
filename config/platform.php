@@ -141,14 +141,63 @@ return [
 
     'db' => [
         /*
-         * Where dumps are written, and how many are kept. The disk is the
-         * host's - the package never invents storage.
+         * The disk is the host's - the package never invents storage.
          */
         'disk' => env('PLATFORM_BACKUP_DISK', 'local'),
-        'path' => env('PLATFORM_BACKUP_PATH', 'backups'),
-        'keep' => (int) env('PLATFORM_BACKUP_KEEP', 14),
-        'timeout' => (int) env('PLATFORM_BACKUP_TIMEOUT', 900),
+        'timeout' => (int) env('PLATFORM_BACKUP_TIMEOUT', 1800),
+        'compression' => (int) env('PLATFORM_BACKUP_COMPRESSION', 9),
         'gzip' => (bool) env('PLATFORM_BACKUP_GZIP', true),
+        'working_directory' => env('PLATFORM_BACKUP_WORKDIR'),
+
+        /*
+         * Object storage fails in ways a local disk does not, and a failed
+         * upload looks identical to a rejected one once the disk swallows
+         * the reason. Retried with a widening gap before it is called lost.
+         */
+        'attempts' => (int) env('PLATFORM_BACKUP_ATTEMPTS', 3),
+
+        /*
+         * Two tiers rather than one retention number: an hourly dump is for
+         * the mistake somebody made this morning, a daily one is for the
+         * corruption nobody noticed for a fortnight. Keeping a fortnight of
+         * hourlies to get the second costs fourteen times the storage.
+         *
+         * The first dump taken after daily_hour UTC is promoted to daily.
+         */
+        'tiers' => [
+            'hourly' => [
+                'prefix' => env('PLATFORM_BACKUP_HOURLY_PREFIX', 'backups/hourly'),
+                'hours' => (int) env('PLATFORM_BACKUP_HOURLY_HOURS', 48),
+            ],
+            'daily' => [
+                'prefix' => env('PLATFORM_BACKUP_DAILY_PREFIX', 'backups/daily'),
+                'days' => (int) env('PLATFORM_BACKUP_DAILY_DAYS', 30),
+                'hour' => (int) env('PLATFORM_BACKUP_DAILY_HOUR', 0),
+            ],
+        ],
+
+        /*
+         * A connection whose role may bypass row level security, used for
+         * the dump and for the role work a restore does. Null means the
+         * application's own connection, which on a tenant database means
+         * pg_dump sees no rows at all - so Backup refuses rather than
+         * writing a file that restores to an empty database.
+         */
+        'admin_connection' => env('PLATFORM_DB_ADMIN_CONNECTION'),
+
+        'rebuild' => [
+            /*
+             * Tables whose rows are not carried across a rebuild, because
+             * the rebuilt schema writes them itself.
+             */
+            'unrestored' => ['migrations'],
+
+            /*
+             * The product's own last word on whether the rebuilt database
+             * is sound, run before the copy is dropped. Empty skips it.
+             */
+            'verify_commands' => [],
+        ],
     ],
 
     'auth' => [

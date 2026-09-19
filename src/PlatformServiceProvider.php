@@ -16,6 +16,7 @@ use NoriaLabs\Platform\Auth\Otp;
 use NoriaLabs\Platform\Auth\SocialState;
 use NoriaLabs\Platform\Console\BackupCommand;
 use NoriaLabs\Platform\Console\PruneOtpCommand;
+use NoriaLabs\Platform\Console\RebuildCommand;
 use NoriaLabs\Platform\Console\RestoreCommand;
 use NoriaLabs\Platform\Console\SchedulerHealthyCommand;
 use NoriaLabs\Platform\Console\SchedulerHeartbeatCommand;
@@ -27,6 +28,7 @@ use NoriaLabs\Platform\Contracts\PrincipalResolver;
 use NoriaLabs\Platform\Contracts\RoleRepository;
 use NoriaLabs\Platform\Db\Backup;
 use NoriaLabs\Platform\Db\DumperFactory;
+use NoriaLabs\Platform\Db\Rebuild;
 use NoriaLabs\Platform\Db\Restore;
 use NoriaLabs\Platform\Rbac\PermissionResolver;
 use NoriaLabs\Platform\Tenancy\Tenancy;
@@ -59,6 +61,7 @@ class PlatformServiceProvider extends ServiceProvider
         $this->app->singleton(DumperFactory::class);
         $this->app->singleton(Backup::class);
         $this->app->singleton(Restore::class);
+        $this->app->singleton(Rebuild::class);
     }
 
     public function boot(): void
@@ -71,6 +74,7 @@ class PlatformServiceProvider extends ServiceProvider
                 PruneOtpCommand::class,
                 SchedulerHealthyCommand::class,
                 SchedulerHeartbeatCommand::class,
+                RebuildCommand::class,
             ]);
 
             $this->publishes([

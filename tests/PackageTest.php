@@ -4,14 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use NoriaLabs\Platform\Audit\AuditLog;
 use NoriaLabs\Platform\Auth\OtpChallenge;
-use NoriaLabs\Platform\Db\Backup;
-use NoriaLabs\Platform\Db\DumperFactory;
-use NoriaLabs\Platform\Db\Dumpers\MysqlDumper;
-use NoriaLabs\Platform\Db\Dumpers\PostgresDumper;
-use NoriaLabs\Platform\Db\Dumpers\SqliteDumper;
 use NoriaLabs\Platform\Http\Middleware\SecurityHeaders;
 use NoriaLabs\Platform\Platform;
 use Symfony\Component\HttpFoundation\Response;
@@ -93,50 +87,5 @@ describe('security headers', function (): void {
 
     it('holds transport security back until the request is actually secure', function (): void {
         expect(respond()->headers->get('Strict-Transport-Security'))->toBeNull();
-    });
-});
-
-describe('database operations', function (): void {
-    it('picks a dumper for each driver the estate runs', function (): void {
-        $factory = app(DumperFactory::class);
-
-        expect($factory->make('pgsql'))->toBeInstanceOf(PostgresDumper::class);
-        expect($factory->make('mysql'))->toBeInstanceOf(MysqlDumper::class);
-        expect($factory->make('mariadb'))->toBeInstanceOf(MysqlDumper::class);
-        expect($factory->make('sqlite'))->toBeInstanceOf(SqliteDumper::class);
-    });
-
-    it('says which driver it has no dumper for', function (): void {
-        app(DumperFactory::class)->make('oracle');
-    })->throws(RuntimeException::class, 'oracle');
-
-    it('lets a product register a dumper of its own', function (): void {
-        $factory = app(DumperFactory::class);
-        $factory->register('oracle', SqliteDumper::class);
-
-        expect($factory->make('oracle'))->toBeInstanceOf(SqliteDumper::class);
-    });
-
-    it('keeps only as many backups as the product asked for', function (): void {
-        Storage::fake('backups');
-        config(['platform.db.disk' => 'backups', 'platform.db.keep' => 2]);
-
-        foreach (['a', 'b', 'c', 'd'] as $name) {
-            Storage::disk('backups')->put("backups/db-{$name}.sql.gz", 'x');
-        }
-
-        $removed = app(Backup::class)->prune();
-
-        expect($removed)->toHaveCount(2);
-        expect(app(Backup::class)->all())->toBe(['backups/db-d.sql.gz', 'backups/db-c.sql.gz']);
-    });
-
-    it('keeps everything when the product set no limit', function (): void {
-        Storage::fake('backups');
-        config(['platform.db.disk' => 'backups', 'platform.db.keep' => 0]);
-
-        Storage::disk('backups')->put('backups/db-a.sql.gz', 'x');
-
-        expect(app(Backup::class)->prune())->toBe([]);
     });
 });

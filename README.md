@@ -136,7 +136,35 @@ means no.
 
 ### Db
 
-`platform:backup`, `platform:restore`, and a dumper per driver. `register()` takes a product's own.
+`platform:backup`, `platform:restore`, `platform:rebuild`, and a dumper per driver. `register()`
+takes a product's own.
+
+**Backups need a role that bypasses row level security.** `pg_dump` run as an RLS-constrained role
+writes a file that looks entirely normal and holds no rows, and nobody finds out until a restore.
+The preflight refuses rather than letting that file exist, so point `platform.db.admin_connection`
+at a role created with `bypassrls`.
+
+Two tiers, not one retention number: an hourly dump answers the mistake somebody made this
+morning, a daily one answers the corruption nobody noticed for a fortnight, and keeping a
+fortnight of hourlies to get the second costs fourteen times the storage. The first dump after
+`tiers.daily.hour` is promoted; the rest of the day stays hourly. A sweep that fails is logged and
+does not fail the run - the dump is already safe, and turning a storage bill into a missing backup
+would be the worse trade. Uploads and listings retry, because on object storage a connection
+failure and a rejection look identical once the disk swallows the reason.
+
+`restore --database=` restores beside the live database rather than over it, creating it and
+granting the application role in: a rehearsal that proves the dump before anybody bets on it.
+
+`platform:rebuild` exists because migrations edited in place rather than added to leave a
+long-lived database behind for good - `migrate` sees every file already run, and the gap only
+surfaces as a missing relation somewhere deep inside a request. It runs the migrations against an
+empty probe database first and compares: a table or column the migrations no longer define is
+dropped when it is empty and **refuses to proceed** when it still holds rows, so nothing is lost
+quietly. Then it copies, dumps, rebuilds from the migrations, reloads, and verifies every table
+row for row against the copy before dropping it. Constraints added `NOT VALID` come off for the
+reload and go back on afterwards, still not validated, because reloading grandfathered rows
+through them would fail. Nothing is deleted, and if any step fails the error says how to swap the
+copy back.
 
 `platform:scheduler-heartbeat` on the schedule and `platform:scheduler-healthy` as the container
 healthcheck: a scheduler that is running but never firing looks identical to a healthy one from
@@ -173,7 +201,10 @@ export, padded and duplicated headers - and yields rows numbered the way the spr
 | RBAC catalogue | `platform.rbac.resources`, `.actions` |
 | CSP directives | `platform.http.security_headers.directives` |
 | Currency and minor units | `platform.money.*` |
-| Backup disk, retention | `platform.db.*` |
+| Backup disk, tiers, retention, retries | `platform.db.*` |
+| The role dumps and restores run as | `platform.db.admin_connection` |
+| Tables a rebuild does not carry | `platform.db.rebuild.unrestored` |
+| Checks a rebuild ends on | `platform.db.rebuild.verify_commands` |
 | OTP length, TTL, attempts, resend wait | `platform.auth.otp.*` |
 | Extra redaction keys | `platform.log.*` |
 | Trusted proxies | `platform.http.trusted_proxies` + the `TrustProxies` middleware |
@@ -197,6 +228,15 @@ psql postgres -c "create role platform_test login password 'platform_test' nosup
 psql postgres -c "create database platform_test owner platform_test"
 
 PLATFORM_TEST_PG="pgsql://platform_test:platform_test@127.0.0.1:5432/platform_test" vendor/bin/pest
+```
+
+The dump and restore tests need a second role as well, one that may bypass row level security,
+and they skip without it rather than passing against a file that would have come back empty:
+
+```bash
+psql postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls in role platform_test"
+
+PLATFORM_TEST_PG_ADMIN="pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test" vendor/bin/pest
 ```
 
 Without `PLATFORM_TEST_PG` the suite runs on SQLite and everything Postgres-only skips.

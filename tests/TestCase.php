@@ -50,6 +50,20 @@ abstract class TestCase extends Orchestra
                 'sslmode' => 'prefer',
             ]);
             $app['config']->set('database.default', 'platform_pg');
+
+            // A second connection whose role may bypass row level security.
+            // Without it the dump tests skip rather than pass against a
+            // file that would have come back empty.
+            if (($admin = env('PLATFORM_TEST_PG_ADMIN')) !== null) {
+                $app['config']->set('database.connections.platform_pg_admin', [
+                    'driver' => 'pgsql',
+                    'url' => $admin,
+                    'charset' => 'utf8',
+                    'prefix' => '',
+                    'search_path' => 'public',
+                    'sslmode' => 'prefer',
+                ]);
+            }
         } else {
             $app['config']->set('database.default', 'testing');
         }
