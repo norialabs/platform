@@ -12,6 +12,7 @@ return [
     'tables' => [
         'audit_logs' => env('PLATFORM_TABLE_AUDIT_LOGS'),
         'otp_challenges' => env('PLATFORM_TABLE_OTP_CHALLENGES'),
+        'invitations' => env('PLATFORM_TABLE_INVITATIONS'),
     ],
 
     'table_prefix' => env('PLATFORM_TABLE_PREFIX', ''),
@@ -198,6 +199,43 @@ return [
              */
             'verify_commands' => [],
         ],
+    ],
+
+    'identity' => [
+        /*
+         * A key of its own so rotating the application key does not orphan
+         * every outstanding invitation and sign-in code at once. Falls back
+         * to the application key when unset.
+         */
+        'hash_key' => env('PLATFORM_HASH_KEY'),
+
+        'country' => env('PLATFORM_COUNTRY', 'KE'),
+
+        /*
+         * Local spellings normalise against these. A product selling into
+         * another market adds its code rather than editing the package.
+         */
+        'dialling_codes' => [
+            'KE' => '254',
+            'UG' => '256',
+            'TZ' => '255',
+            'RW' => '250',
+            'ET' => '251',
+            'NG' => '234',
+            'GH' => '233',
+            'ZA' => '27',
+        ],
+    ],
+
+    'invitations' => [
+        'ttl_days' => (int) env('PLATFORM_INVITATION_TTL_DAYS', 7),
+
+        /*
+         * Somebody accepting has not joined a workspace yet, so the row is
+         * read through a policy keyed on this setting rather than through
+         * tenancy. Add it to tenancy.gucs or nothing will clear it.
+         */
+        'token_guc' => env('PLATFORM_INVITATION_GUC', 'app.invitation_token'),
     ],
 
     'auth' => [

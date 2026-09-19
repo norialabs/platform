@@ -66,9 +66,15 @@ abstract class TestCase extends Orchestra
             }
         } else {
             $app['config']->set('database.default', 'testing');
+
+            // Row level security is a Postgres feature, and the session
+            // settings it reads do not exist elsewhere. Saying so here is
+            // truthful and lets the rest of the suite run on SQLite.
+            $app['config']->set('platform.tenancy.enabled', false);
         }
 
         $app['config']->set('cache.default', 'array');
+        $app['config']->set('platform.identity.hash_key', 'a-test-hash-key');
         $app['config']->set('platform.rbac.resources', Resource::class);
         $app['config']->set('platform.rbac.actions', Action::class);
 

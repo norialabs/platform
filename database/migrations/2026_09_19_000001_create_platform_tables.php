@@ -50,19 +50,47 @@ return new class extends Migration
             $table->index([$tenantColumn, 'created_at']);
         });
 
+        /*
+         * Neither the code nor the address it went to is kept in clear. A
+         * dump signs nobody in and tells nobody who was signing in; the
+         * hint is the part a screen shows back.
+         */
         Schema::create(Platform::table('otp_challenges'), function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->string('identifier', 256)->index();
+            $table->string('destination_hash', 64)->index();
+            $table->string('destination_hint', 128)->nullable();
+            $table->string('channel', 16)->default('email');
             $table->string('code_hash', 256);
             $table->unsignedSmallInteger('attempts')->default(0);
             $table->timestamp('expires_at')->index();
             $table->timestamp('consumed_at')->nullable();
             $table->timestamps();
         });
+
+        /*
+         * Open is three conditions rather than a status column, because a
+         * status has to be written to expire and these expire on their own.
+         */
+        Schema::create(Platform::table('invitations'), function (Blueprint $table) use ($tenantColumn): void {
+            $table->uuid('id')->primary();
+            $table->uuid($tenantColumn)->nullable()->index();
+            $table->string('destination_hash', 64)->index();
+            $table->string('destination_hint', 128)->nullable();
+            $table->string('channel', 16)->default('email');
+            $table->string('role', 64);
+            $table->string('token_hash', 64)->unique();
+            $table->string('invited_by', 64)->nullable();
+            $table->string('accepted_by', 64)->nullable();
+            $table->timestamp('expires_at')->index();
+            $table->timestamp('accepted_at')->nullable();
+            $table->timestamp('revoked_at')->nullable();
+            $table->timestamps();
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists(Platform::table('invitations'));
         Schema::dropIfExists(Platform::table('otp_challenges'));
         Schema::dropIfExists(Platform::table('audit_logs'));
     }

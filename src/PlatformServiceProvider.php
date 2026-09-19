@@ -21,6 +21,7 @@ use NoriaLabs\Platform\Console\RestoreCommand;
 use NoriaLabs\Platform\Console\SchedulerHealthyCommand;
 use NoriaLabs\Platform\Console\SchedulerHeartbeatCommand;
 use NoriaLabs\Platform\Console\TenancyCheckCommand;
+use NoriaLabs\Platform\Contracts\Courier;
 use NoriaLabs\Platform\Contracts\PermissionAction;
 use NoriaLabs\Platform\Contracts\PermissionCeiling;
 use NoriaLabs\Platform\Contracts\PermissionResource;
@@ -30,6 +31,8 @@ use NoriaLabs\Platform\Db\Backup;
 use NoriaLabs\Platform\Db\DumperFactory;
 use NoriaLabs\Platform\Db\Rebuild;
 use NoriaLabs\Platform\Db\Restore;
+use NoriaLabs\Platform\Identity\KeyedHash;
+use NoriaLabs\Platform\Invitations\Invitations;
 use NoriaLabs\Platform\Rbac\PermissionResolver;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 
@@ -56,7 +59,13 @@ class PlatformServiceProvider extends ServiceProvider
         ));
 
         $this->app->scoped(AuditRecorder::class);
+        $this->app->singleton(KeyedHash::class, fn (): KeyedHash => new KeyedHash);
         $this->app->singleton(Otp::class);
+        $this->app->scoped(Invitations::class, fn (Application $app): Invitations => new Invitations(
+            $app->make(KeyedHash::class),
+            $app->make(Tenancy::class),
+            $app->bound(Courier::class) ? $app->make(Courier::class) : null,
+        ));
         $this->app->singleton(SocialState::class);
         $this->app->singleton(DumperFactory::class);
         $this->app->singleton(Backup::class);

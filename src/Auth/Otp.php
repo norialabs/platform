@@ -8,61 +8,32 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use NoriaLabs\Platform\Identity\Channel;
+use NoriaLabs\Platform\Identity\Destination;
+use NoriaLabs\Platform\Identity\KeyedHash;
 use NoriaLabs\Platform\Platform;
 
 /**
- * Issuing and checking a one-time code, and nothing else: no user lookup, no
- * mail, no session. The product decides who may receive one and how it
- * reaches them, because those answers differ per product and this does not.
+ * Issuing and checking a one-time code, and nothing else: no user lookup,
+ * no mail, no session, because those answers differ per product and this
+ * does not.
  *
- * Issuing invalidates whatever was outstanding for the same identifier, so
- * two codes are never live at once and the newest mail is always the right
- * one.
+ * Neither the code nor the address it went to is stored in clear. A dump of
+ * this table signs nobody in and tells nobody who was signing in; the hint
+ * is the part a screen can show back.
  */
 class Otp
 {
-    /**
-     * How long until this identifier may ask for another code, or null when
-     * it may ask now. Checked on the row rather than in the cache, so a
-     * restart does not hand out a fresh allowance.
-     */
-    public function secondsUntilNextIssue(string $identifier): ?int
-    {
-        $throttle = Config::integer('platform.auth.otp.throttle', 60);
-
-        if ($throttle <= 0) {
-            return null;
-        }
-
-        $last = Platform::otpChallengeModel()::query()
-            ->where('identifier', $this->normalise($identifier))
-            ->latest('created_at')
-            ->first();
-
-        if ($last === null) {
-            return null;
-        }
-
-        $issuedAt = $last->created_at;
-
-        if ($issuedAt === null) {
-            return null;
-        }
-
-        $ready = $issuedAt->addSeconds($throttle);
-
-        return $ready->isFuture() ? (int) ceil(now()->diffInSeconds($ready, absolute: true)) : null;
-    }
+    public function __construct(private KeyedHash $hash) {}
 
     /**
      * @return string the plain code, which exists only in this return value
      *
-     * @throws OtpThrottled when one was issued for this identifier too recently
+     * @throws OtpThrottled when one was issued to this destination too recently
      */
-    public function issue(string $identifier): string
+    public function issue(Destination $to, Channel $channel = Channel::Email): string
     {
-        $wait = $this->secondsUntilNextIssue($identifier);
+        $wait = $this->secondsUntilNextIssue($to);
 
         if ($wait !== null) {
             throw new OtpThrottled("Another code may be requested in {$wait} seconds.", $wait);
@@ -70,10 +41,14 @@ class Otp
 
         $code = $this->code();
 
-        $this->pending($identifier)->delete();
+        // Two live codes means the newest message is not reliably the one
+        // that works.
+        $this->pending($to)->delete();
 
         Platform::otpChallengeModel()::query()->create([
-            'identifier' => $this->normalise($identifier),
+            'destination_hash' => $this->hash->of($to->value),
+            'destination_hint' => $to->masked(),
+            'channel' => $channel->value,
             'code_hash' => Hash::make($code),
             'attempts' => 0,
             'expires_at' => Carbon::now()->addMinutes(Config::integer('platform.auth.otp.ttl', 10)),
@@ -82,9 +57,9 @@ class Otp
         return $code;
     }
 
-    public function verify(string $identifier, string $code): OtpOutcome
+    public function verify(Destination $to, string $code): OtpOutcome
     {
-        $challenge = $this->pending($identifier)->latest('created_at')->first();
+        $challenge = $this->pending($to)->latest('created_at')->first();
 
         if ($challenge === null) {
             return OtpOutcome::NoChallenge;
@@ -111,6 +86,35 @@ class Otp
         return OtpOutcome::Verified;
     }
 
+    /**
+     * How long until this destination may ask for another code, or null
+     * when it may ask now. Counted on the row rather than in the cache, so
+     * a restart does not hand out a fresh allowance.
+     */
+    public function secondsUntilNextIssue(Destination $to): ?int
+    {
+        $throttle = Config::integer('platform.auth.otp.throttle', 60);
+
+        if ($throttle <= 0) {
+            return null;
+        }
+
+        $last = Platform::otpChallengeModel()::query()
+            ->where('destination_hash', $this->hash->of($to->value))
+            ->latest('created_at')
+            ->first();
+
+        $issuedAt = $last?->created_at;
+
+        if ($issuedAt === null) {
+            return null;
+        }
+
+        $ready = $issuedAt->addSeconds($throttle);
+
+        return $ready->isFuture() ? (int) ceil(now()->diffInSeconds($ready, absolute: true)) : null;
+    }
+
     /** Rows nobody will use again. Consumed ones are kept for the trail until they age out. */
     public function prune(int $days = 7): int
     {
@@ -122,10 +126,10 @@ class Otp
     }
 
     /** @return Builder<OtpChallenge> */
-    private function pending(string $identifier)
+    private function pending(Destination $to)
     {
         return Platform::otpChallengeModel()::query()
-            ->where('identifier', $this->normalise($identifier))
+            ->where('destination_hash', $this->hash->of($to->value))
             ->whereNull('consumed_at');
     }
 
@@ -144,10 +148,5 @@ class Otp
         }
 
         return $code;
-    }
-
-    private function normalise(string $identifier): string
-    {
-        return Str::lower(trim($identifier));
     }
 }

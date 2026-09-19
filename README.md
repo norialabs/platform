@@ -118,13 +118,28 @@ back to the default one, so `auth` and `backup` are optional.
 Append-only, outside tenancy, and the trail outlives the workspace it describes. One
 `AuditRecorder`, one shared request id so a row and a log line written seconds apart join up.
 
+### Identity
+
+`Destination` is an email address or a phone number normalised to the one spelling everything else
+stores and hashes. Every path that identifies a person by a channel goes through it, because two
+spellings of one address that hash differently are two accounts for one person. `Phone` puts a
+number in E.164 against a dialling code from config, so a new market is a config line.
+
+`KeyedHash` is keyed SHA-256, for a value the system must look up and must never read back. The
+key is what makes it unguessable - a plain digest of a Kenyan mobile is 10^8, seconds of work -
+and it is not in the database.
+
+Both a destination and a token are stored hashed, with a masked hint beside them: enough to
+recognise which of your addresses was used, never enough to reconstruct one you have not seen.
+
 ### Auth
 
 Issuing and checking a one-time code, and the mechanics of a provider round trip. No user lookup,
 no mail, no session, no routes: those differ per product and these do not.
 
-Codes are hashed, attempts are counted on the row rather than in the cache, issuing cancels
-whatever was outstanding so the newest mail is always the one that works, and a resend inside
+Neither the code nor the address it went to is kept in clear, so a dump of the table signs nobody
+in and names nobody. Attempts are counted on the row rather than in the cache, issuing cancels
+whatever was outstanding so the newest message is always the one that works, and a resend inside
 `platform.auth.otp.throttle` throws `OtpThrottled` carrying the wait.
 
 `SocialState` mints and claims the nonce that binds a provider round trip to the browser that
@@ -133,6 +148,23 @@ because that is the only moment the intent is known: begun by nobody is a sign-i
 somebody is a link. Single use, keyed by hash. `ProviderProfile` normalises what came back and
 keeps no provider token; `email_verified` and `verified_email` are the same answer and absent
 means no.
+
+### Invitations
+
+One open invitation per destination, a hashed single-use token, a deadline, and the answer that
+the person accepting is the person invited - a leaked link must not become an account in somebody
+else's workspace.
+
+What a role means and who becomes a member stay with the product: `accept()` marks the invitation
+used inside its workspace and hands it back for the caller to write the membership from. Delivery
+is the `Courier` contract, because the wording, the template and the provider are the product's.
+
+A token is read through a policy keyed on `platform.invitations.token_guc` rather than through
+tenancy, because somebody accepting has not joined a workspace yet:
+
+```php
+Rls::allowLookupByGuc('invitations', 'token_hash', 'app.invitation_token');
+```
 
 ### Db
 
@@ -195,7 +227,9 @@ export, padded and duplicated headers - and yields rows numbered the way the spr
 |---|---|
 | Database | `platform.connection` |
 | Table names | `platform.table_prefix`, or `platform.tables.<name>` for one |
-| Models | `Platform::useAuditLogModel(...)`, `useOtpChallengeModel(...)` |
+| Models | `Platform::useAuditLogModel(...)`, `useOtpChallengeModel(...)`, `useInvitationModel(...)` |
+| Hash key, country, dialling codes | `platform.identity.*` |
+| Invitation deadline and lookup setting | `platform.invitations.*` |
 | Tenant column and settings | `platform.tenancy.column`, `.workspace_guc`, `.gucs` |
 | Tables outside tenancy | `platform.tenancy.unscoped_tables` |
 | RBAC catalogue | `platform.rbac.resources`, `.actions` |

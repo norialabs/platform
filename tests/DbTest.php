@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use NoriaLabs\Platform\Db\Backup;
 use NoriaLabs\Platform\Db\BackupTier;
 use NoriaLabs\Platform\Db\ColumnShape;
+use NoriaLabs\Platform\Db\Connections;
 use NoriaLabs\Platform\Db\DumperFactory;
 use NoriaLabs\Platform\Db\Dumpers\MysqlDumper;
 use NoriaLabs\Platform\Db\Dumpers\PostgresDumper;
@@ -16,6 +17,20 @@ use NoriaLabs\Platform\Db\Dumpers\SqliteDumper;
 use NoriaLabs\Platform\Db\Identifier;
 use NoriaLabs\Platform\Db\Restore;
 use NoriaLabs\Platform\Db\Schemas;
+
+function dropRestoreTarget(): void
+{
+    $admin = Connections::open('teardown', [
+        ...Connections::asAdmin(Connections::settings()),
+        'database' => 'postgres',
+    ]);
+
+    try {
+        $admin->statement('drop database if exists "platform_test_restore" with (force)');
+    } finally {
+        $admin->disconnect();
+    }
+}
 
 /** A connection outside the test transaction, so a separate process can see the writes. */
 function committed(): Connection
@@ -262,19 +277,35 @@ describe('a real dump and restore', function (): void {
         }
     });
 
+    /*
+     * Restored beside the live database rather than over it. A restore
+     * replays the dump as the role running it, so every table comes back
+     * owned by that role - doing it in place would take the application
+     * role's access to its own tables away.
+     */
     it('writes a dump that holds the rows, and puts them back', function (): void {
         $result = app(Backup::class)->run('backups');
 
         expect($result['bytes'])->toBeGreaterThan(0);
         expect(Storage::disk('backups')->exists($result['key']))->toBeTrue();
 
-        committed()->table('widgets')->delete();
-        expect(committed()->table('widgets')->count())->toBe(0);
+        $restored = app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
 
-        app(Restore::class)->run($result['key'], 'backups', force: true);
+        expect($restored['created'])->toBeTrue();
+        expect($restored['database'])->toBe('platform_test_restore');
 
-        expect(committed()->table('widgets')->pluck('name')->sort()->values()->all())
-            ->toBe(['ours', 'theirs']);
+        $beside = Connections::open('assert', [
+            ...Connections::asAdmin(Connections::settings()),
+            'database' => 'platform_test_restore',
+        ]);
+
+        try {
+            expect($beside->table('widgets')->pluck('name')->sort()->values()->all())
+                ->toBe(['ours', 'theirs']);
+        } finally {
+            $beside->disconnect();
+            dropRestoreTarget();
+        }
     });
 
     it('promotes the first dump after the daily boundary', function (): void {
