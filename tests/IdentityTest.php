@@ -8,10 +8,6 @@ use NoriaLabs\Platform\Identity\KeyedHash;
 use NoriaLabs\Platform\Identity\Phone;
 
 describe('a phone number', function (): void {
-    /*
-     * Local, international and imported spellings of one number have to
-     * land on one string, or the same customer becomes two accounts.
-     */
     it('normalises every spelling of one number to the same string', function (string $raw): void {
         expect(Phone::normalise($raw, 'KE'))->toBe('+254712345678');
     })->with(['0712345678', '712345678', '254712345678', '+254712345678', '+254 712 345 678', '0712-345-678']);
@@ -39,7 +35,6 @@ describe('a phone number', function (): void {
         expect(Phone::normalise('0977123456', 'ZM'))->toBe('+260977123456');
     });
 
-    /* Enough to recognise, not enough to dial. */
     it('masks the middle when a log line carries one', function (): void {
         expect(Phone::tryFrom('+254712345678')?->masked())->toBe('+254712***678');
     });
@@ -68,7 +63,6 @@ describe('a destination', function (): void {
         expect($phone?->suits(Channel::Sms))->toBeTrue();
     });
 
-    /* The only form of a destination ever stored in clear. */
     it('masks enough to recognise and not enough to reconstruct', function (): void {
         expect(Destination::tryFrom('ada@example.com')?->masked())->toBe('a**@example.com');
         expect(Destination::tryFrom('+254712345678')?->masked())->toBe('+254712***678');
@@ -82,7 +76,6 @@ describe('a keyed hash', function (): void {
         expect($hash->of('ada@example.com'))->toBe($hash->of('ada@example.com'));
     });
 
-    /* A plain digest of a Kenyan mobile is 10^8: seconds of work. */
     it('gives a different hash under a different key', function (): void {
         expect((new KeyedHash('one'))->of('ada@example.com'))
             ->not->toBe((new KeyedHash('two'))->of('ada@example.com'));

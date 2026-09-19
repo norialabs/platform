@@ -6,11 +6,6 @@ namespace NoriaLabs\Platform\Db;
 
 use Illuminate\Support\Facades\Config;
 
-/**
- * An hourly dump answers the mistake somebody made this morning; a daily
- * one answers the corruption nobody noticed for a fortnight. Keeping a
- * fortnight of hourlies to get the second costs fourteen times the storage.
- */
 enum BackupTier: string
 {
     case Hourly = 'hourly';
@@ -23,7 +18,6 @@ enum BackupTier: string
         return trim($prefix, '/');
     }
 
-    /** How long a dump in this tier is kept, in hours. */
     public function retentionHours(): int
     {
         return match ($this) {

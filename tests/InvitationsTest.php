@@ -29,10 +29,6 @@ beforeEach(function (): void {
 });
 
 describe('inviting somebody', function (): void {
-    /*
-     * A dump of this table lets nobody accept anything and tells nobody
-     * who was invited. The hint is the part a screen shows back.
-     */
     it('keeps neither the token nor the address in the clear', function (): void {
         ['token' => $token] = app(Invitations::class)->invite(ada(), 'member');
 
@@ -71,7 +67,6 @@ describe('inviting somebody', function (): void {
         expect(Invitation::query()->sole()->channel)->toBe('whatsapp');
     });
 
-    /* Two live invitations means the newest message is not the one that works. */
     it('replaces an outstanding invitation rather than adding a second', function (): void {
         $invitations = app(Invitations::class);
         ['token' => $first] = $invitations->invite(ada(), 'member');
@@ -104,7 +99,6 @@ describe('accepting one', function (): void {
         expect($accepted->role)->toBe('member');
     });
 
-    /* A leaked link must not become an account in somebody else's workspace. */
     it('refuses somebody who is not the person invited', function (): void {
         $invitations = app(Invitations::class);
         ['token' => $token] = $invitations->invite(ada(), 'member');

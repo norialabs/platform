@@ -35,7 +35,6 @@ it('never issues a code a leading zero could be eaten from', function (): void {
     }
 });
 
-/* A dump of this table must sign nobody in and name nobody. */
 it('stores neither the code nor the address in the clear', function (): void {
     $code = app(Otp::class)->issue(to('ada@example.com'));
 
@@ -82,7 +81,6 @@ it('refuses a code that has expired', function (): void {
     Carbon::setTestNow();
 });
 
-/* A rate limit the cache forgets on restart is not a rate limit. */
 it('stops accepting guesses after the configured number of them', function (): void {
     config(['noria.auth.otp.attempts' => 3]);
 
@@ -113,7 +111,6 @@ it('cannot be used twice', function (): void {
     expect($otp->verify(to('ada@example.com'), $code))->toBe(OtpOutcome::NoChallenge);
 });
 
-/* Two live codes means the newest mail is not reliably the one that works. */
 it('cancels the outstanding code when a new one is asked for', function (): void {
     config(['noria.auth.otp.throttle' => 0]);
 
@@ -145,7 +142,6 @@ it('clears out codes nobody will use again', function (): void {
 });
 
 describe('asking too often', function (): void {
-    /* A limit the cache forgets on restart is not a limit, so it is on the row. */
     it('refuses a second code asked for too soon', function (): void {
         $otp = app(Otp::class);
         $otp->issue(to('ada@example.com'));
@@ -198,7 +194,6 @@ describe('a round trip through a provider', function (): void {
             ->toBe(['provider' => 'google', 'actor_id' => null]);
     });
 
-    /* A code replayed with the same state must find nothing. */
     it('accepts a state once and never again', function (): void {
         $state = app(SocialState::class);
         $issued = $state->issue('google');
@@ -212,7 +207,6 @@ describe('a round trip through a provider', function (): void {
         expect(app(SocialState::class)->claim('made-up'))->toBeNull();
     });
 
-    /* Begun by nobody is a sign-in; begun by somebody is a link. */
     it('remembers who began the round trip, which is what it meant by it', function (): void {
         $state = app(SocialState::class);
 
@@ -242,7 +236,6 @@ describe('a round trip through a provider', function (): void {
         expect($silent->emailVerified)->toBeFalse();
     });
 
-    /* A debugging aid, not a credential store. */
     it('keeps no provider token in what it hands back', function (): void {
         $profile = ProviderProfile::make('google', '1', 'ada@example.com', raw: [
             'access_token' => 'secret', 'refresh_token' => 'secret', 'locale' => 'en',
@@ -300,11 +293,6 @@ describe('a workspace scoped token', function (): void {
         expect($token->workspace_id)->toBe('01a0b000-0000-7000-8000-00000000000a');
     });
 
-    /*
-     * Enforced on the model rather than at the caller, so no controller,
-     * job or command can mint a token spanning every workspace by
-     * forgetting a line.
-     */
     it('refuses to be written at all when it names no workspace', function (): void {
         mint(['invoice:view']);
     })->throws(UnscopedToken::class);
@@ -324,7 +312,6 @@ describe('a workspace scoped token', function (): void {
         try {
             mint(['invoice:view']);
         } catch (UnscopedToken) {
-            // The point is what the table holds afterwards.
         }
 
         expect(PersonalAccessToken::query()->count())->toBe(0);

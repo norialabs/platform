@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace NoriaLabs\Platform\Db;
 
-/** One column as the catalog describes it, typed so a drift comparison can trust it. */
 final readonly class ColumnShape
 {
     public function __construct(
         public string $table,
         public string $name,
         public string $dataType,
-        /** -1 where the type is not length bound. */
         public int $length,
         public bool $nullable,
         public ?string $default,

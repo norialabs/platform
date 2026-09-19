@@ -7,17 +7,6 @@ namespace NoriaLabs\Platform\Auth;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Config;
 
-/**
- * What binds a provider round trip to the browser that started it, and to
- * what that browser meant by it.
- *
- * Stateless mode in Socialite means no state parameter at all, so the nonce
- * is minted and checked here. The actor is recorded at mint time because
- * that is the only moment the intent is known: begun by nobody is a sign-in,
- * begun by somebody is a link to an existing account.
- *
- * Keyed by hash, so a cache dump holds no usable states.
- */
 class SocialState
 {
     private const PREFIX = 'noria:social:state:';
@@ -37,9 +26,6 @@ class SocialState
     }
 
     /**
-     * Single use: taken on first read, so a code replayed with the same
-     * state finds nothing.
-     *
      * @return array{provider: string, actor_id: string|null}|null
      */
     public function claim(string $state): ?array

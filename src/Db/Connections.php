@@ -10,14 +10,6 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
-/**
- * Resolving the settings a dump or a restore runs against.
- *
- * The application's own role is usually the wrong one for both: on a
- * database with row level security forced, pg_dump as that role sees no
- * rows, and a restore needs to create and grant. The admin connection
- * supplies a role that may do those things and nothing else.
- */
 final class Connections
 {
     private function __construct() {}
@@ -32,15 +24,10 @@ final class Connections
             throw new RuntimeException("Unknown database connection [{$name}].");
         }
 
-        // An app configured with a single url has no host, port or database
-        // key of its own, and the command line tools take those as separate
-        // arguments. Parsed here so everything downstream sees one shape.
         return self::parse($settings);
     }
 
     /**
-     * The same database, reached as the admin role where the host named one.
-     *
      * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
@@ -58,8 +45,6 @@ final class Connections
             return $settings;
         }
 
-        // Parsed for the same reason settings() is: the admin connection is
-        // as likely to be a url as the application's own.
         $credentials = self::parse($credentials);
 
         $username = $credentials['username'] ?? null;
@@ -73,9 +58,6 @@ final class Connections
     }
 
     /**
-     * A throwaway connection, named so two of them never collide, and the
-     * caller's to disconnect.
-     *
      * @param  array<string, mixed>  $settings
      */
     public static function open(string $purpose, array $settings): Connection

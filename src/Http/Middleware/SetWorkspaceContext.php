@@ -10,12 +10,6 @@ use NoriaLabs\Platform\Contracts\WorkspaceResolver;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * Puts the request's workspace on the connection, and takes it off again.
- *
- * terminate() is not optional. The setting is session scoped, so a pooled
- * connection would serve the next caller somebody else's data.
- */
 class SetWorkspaceContext
 {
     public function __construct(

@@ -12,11 +12,6 @@ use NoriaLabs\Platform\Platform;
 use PDOException;
 use RuntimeException;
 
-/**
- * The policy DDL a migration calls to seal a table off. Isolation lives in
- * the database rather than in a global scope, so a forgotten where clause,
- * a raw query or a console command cannot step around it.
- */
 class Rls
 {
     public static function protect(string $table, bool $staffRead = false): void
@@ -35,11 +30,6 @@ class Rls
         }
     }
 
-    /**
-     * Rows belonging to the workspace, plus platform-wide rows whose tenant
-     * column is null. Reads see both; writes may only ever land in the
-     * caller's own workspace.
-     */
     public static function protectAllowingGlobal(string $table, bool $staffRead = false): void
     {
         self::enable($table);
@@ -57,12 +47,6 @@ class Rls
         }
     }
 
-    /**
-     * Rows written before a workspace is known, read only from inside the one
-     * they belong to. Somebody signing in has not chosen a workspace yet, so
-     * the insert is admitted with none while the read is not, and a
-     * workspace-less row stays reachable through staff read alone.
-     */
     public static function protectTrail(string $table): void
     {
         self::enable($table);
@@ -92,11 +76,6 @@ class Rls
         );
     }
 
-    /**
-     * A sanctioned write path for platform-wide rows: seeders and platform
-     * admin services set the setting for the duration of the write, and
-     * nothing else can.
-     */
     public static function allowPlatformWrite(string $table): void
     {
         $guc = Config::string('noria.tenancy.noria_write_guc', 'app.noria_write');
@@ -108,12 +87,6 @@ class Rls
         );
     }
 
-    /**
-     * A narrow read hole for a row whose owner can prove they hold its key
-     * before any workspace is known: an invitation token, or the user id a
-     * membership belongs to. Select only, and the setting is written from
-     * the authenticated identity, never from a payload.
-     */
     public static function allowLookupByGuc(string $table, string $column, string $guc, ?string $cast = null): void
     {
         $value = "nullif(current_setting('{$guc}', true), '')".($cast === null ? '' : "::{$cast}");
@@ -124,12 +97,6 @@ class Rls
         );
     }
 
-    /**
-     * The one write a trail row is allowed after the fact: being marked as
-     * dealt with. A callback arrives before anybody knows whose it is, so an
-     * unclaimed row stays updatable by anyone. What it does not admit is
-     * touching a row another workspace has claimed.
-     */
     public static function allowTrailProcessing(string $table): void
     {
         $test = '('.self::column().' is null or '.self::tenantPredicate().')';
@@ -140,11 +107,6 @@ class Rls
         );
     }
 
-    /**
-     * Nothing may change a row once it is written. A trigger and not a
-     * policy, so it is not isolation: every table using it carries protect()
-     * or protectTrail() beside it.
-     */
     public static function appendOnly(string $table): void
     {
         self::run(
@@ -176,11 +138,6 @@ class Rls
         }
     }
 
-    /**
-     * The same check, skipped when there is no database to ask. Boot-time
-     * callers run before the container is up in environments that have no
-     * Postgres at all, and a missing database is not a policy failure.
-     */
     public static function assertEnforcedIfReachable(): void
     {
         try {
@@ -210,7 +167,6 @@ class Rls
         return Config::string('noria.tenancy.column', 'workspace_id');
     }
 
-    /** A policy is named for the bare table, so a schema-qualified one still gets a legal name. */
     private static function policy(string $table, string $suffix): string
     {
         $bare = str_contains($table, '.')

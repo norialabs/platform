@@ -7,14 +7,6 @@ namespace NoriaLabs\Platform\Csv;
 use Closure;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/**
- * Writing a file somebody downloads, a row at a time.
- *
- * Streamed rather than built: an export held in memory is an export that
- * works for the first customer to ask for one and times out for the
- * largest. The byte order mark is written because Excel reads a UTF-8 file
- * without one as the current codepage and mangles every accented name.
- */
 final class Writer
 {
     private const BOM = "\xEF\xBB\xBF";
@@ -71,10 +63,6 @@ final class Writer
         };
     }
 
-    /**
-     * A leading =, +, - or @ makes a spreadsheet treat the cell as a formula,
-     * so a customer name can run a command on the machine that opens it.
-     */
     private static function cell(mixed $value): string
     {
         $text = match (true) {

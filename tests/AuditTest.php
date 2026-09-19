@@ -82,11 +82,6 @@ it('trims a user agent long enough to overflow its column', function (): void {
     expect(mb_strlen((string) (new RequestContext($request))->userAgent()))->toBe(512);
 });
 
-/*
- * The package cannot know the host's user model. Keyed as a uuid, a product
- * still on bigint users had every write refused with "invalid input syntax
- * for type uuid".
- */
 it('records an actor from a product whose users are not keyed on uuid', function (): void {
     Auth::shouldReceive('id')->andReturn(42);
 

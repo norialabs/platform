@@ -28,11 +28,6 @@ describe('money', function (): void {
         Money::of(1_000, 'KES')->plus(Money::of(1_000, 'USD'));
     })->throws(InvalidArgumentException::class);
 
-    /*
-     * Minor is hundredths whatever the currency shows, so a tariff of 2.75
-     * per unit survives being multiplied by a reading before anything
-     * rounds it for a document.
-     */
     it('stores hundredths even for a currency that displays none', function (): void {
         expect(Money::fromMajor('1234', 'KES')->minor)->toBe(123_400);
         expect(Money::fromMajor('12.34', 'USD')->minor)->toBe(1_234);
@@ -43,7 +38,6 @@ describe('money', function (): void {
         expect(Money::fromMajor('1.004', 'USD')->minor)->toBe(100);
     });
 
-    /* A silent zero from a mistyped amount is an invoice nobody queries. */
     it('refuses what is not a plain decimal', function (string $raw): void {
         Money::fromMajor($raw, 'KES');
     })->with(['', 'abc', '1,000', '1.2.3', '1e5', ' '])->throws(InvalidArgumentException::class);
@@ -56,7 +50,6 @@ describe('money', function (): void {
         expect(Money::of(100_000, 'KES')->shareOfBasisPoints(250)->minor)->toBe(2_500);
     });
 
-    /* A meter reading or a part hour is not a whole number of units. */
     it('multiplies by a fractional quantity and rounds once at the end', function (): void {
         expect(Money::of(275, 'KES')->times(3.5)->minor)->toBe(963);
     });
@@ -78,10 +71,6 @@ describe('money', function (): void {
 });
 
 describe('showing an amount', function (): void {
-    /*
-     * Fraction digits are a display decision. The shilling shows none and
-     * is still stored in hundredths.
-     */
     it('shows a currency at its own number of decimals', function (): void {
         expect(Money::of(123_400, 'KES')->document())->toBe('1234');
         expect(Money::of(1_234, 'USD')->document())->toBe('12.34');
@@ -92,7 +81,6 @@ describe('showing an amount', function (): void {
         expect(Money::of(123_449, 'KES')->document())->toBe('1234');
     });
 
-    /* A tariff of 2.75 rendered as 3 is not the price. */
     it('shows a rate at two decimals whatever the currency does', function (): void {
         expect(Money::of(275, 'KES')->rate())->toBe('2.75');
         expect(Money::of(275, 'KES')->document())->toBe('3');
@@ -120,7 +108,6 @@ describe('showing an amount', function (): void {
         expect(Money::fractionDigits('KES'))->toBe(2);
     });
 
-    /* Number::currency uses non-breaking spaces, which no CSV survives. */
     it('formats with ordinary spaces', function (): void {
         expect(Money::of(123_400, 'KES')->format())->not->toContain("\u{00A0}");
     });
@@ -135,11 +122,6 @@ describe('showing an amount', function (): void {
         expect(Money::of(123_450, 'UGX')->format())->toContain('USh');
     });
 
-    /*
-     * The bug this guards: ICU renders KES as "KES" under en and "Ksh"
-     * under en_KE, so reading the locale from configuration means a deploy
-     * that sets app.locale silently rewrites every amount in the product.
-     */
     it('renders the same amount whatever the application locale is', function (): void {
         $amount = Money::of(123_450, 'KES');
 
@@ -155,7 +137,6 @@ describe('showing an amount', function (): void {
         expect(Money::localeFor('KES'))->toBe('en_KE');
         expect(Money::localeFor('ZAR'))->toBe('en_ZA');
 
-        // The euro is the currency whose code does not name a country.
         expect(Money::localeFor('EUR'))->toBe('en_IE');
 
         config(['noria.money.locales.KES' => 'sw_KE']);
@@ -181,11 +162,6 @@ describe('validating an amount', function (): void {
         expect(validator(['amount' => $raw], ['amount' => Money::majorRules('USD')])->passes())->toBeFalse();
     })->with(['nonsense', '1,000', '1.2.3', '12abc']);
 
-    /*
-     * Laravel skips a closure rule on an empty value, so an optional
-     * amount left blank passes. A field that must be filled says
-     * 'required' itself, as it would for any other rule.
-     */
     it('leaves an empty optional amount to the caller required rule', function (): void {
         expect(validator(['amount' => ''], ['amount' => Money::majorRules('USD')])->passes())->toBeTrue();
         expect(validator(['amount' => ''], ['amount' => ['required', ...Money::majorRules('USD')]])->passes())->toBeFalse();
@@ -274,10 +250,6 @@ describe('writing a csv', function (): void {
         expect(Writer::toString(['name'], [['Ada']]))->toStartWith("\xEF\xBB\xBF");
     });
 
-    /*
-     * A cell opening with =, +, - or @ is a formula to a spreadsheet, so a
-     * customer name is a way to run a command on whoever opens the export.
-     */
     it('defuses a cell a spreadsheet would run as a formula', function (): void {
         expect(Writer::toString(['name'], [['=cmd|calc']]))->toContain("'=cmd|calc");
     });
@@ -332,7 +304,6 @@ describe('money on a model', function (): void {
         expect(Priced::query()->sole()->getRawOriginal('total'))->toBe(990);
     });
 
-    /* A fixed fallback would mislabel every amount belonging to elsewhere. */
     it('takes the currency from the row beside it', function (): void {
         Priced::query()->create(['id' => '01a0b000-0000-7000-8000-000000000003', 'total' => 500, 'currency' => 'UGX']);
 
@@ -365,10 +336,6 @@ describe('trusting a proxy in the middleware', function (): void {
         return (string) $request->ip();
     }
 
-    /*
-     * Without this every per-address limit counts the whole platform as
-     * one caller, and the trail records the balancer on every row.
-     */
     it('believes the caller a trusted hop forwarded', function (): void {
         config(['noria.http.trusted_proxies' => '10.0.0.1,10.0.0.2']);
 
@@ -395,11 +362,6 @@ describe('trusting a proxy in the middleware', function (): void {
 });
 
 describe('rounding a quantity up to a step', function (): void {
-    /*
-     * A tariff slab is units times a rate, and units are fractional - a
-     * meter reads 12.4. Making that an integer first truncates before the
-     * rounding that was the point.
-     */
     it('carries a fractional amount all the way into the rounding', function (): void {
         expect(Money::roundUpMinor(1234.4, 'KES'))->toBe(1300);
         expect(Money::roundUpMinor(1200.0, 'KES'))->toBe(1200);
@@ -419,10 +381,6 @@ describe('rounding a quantity up to a step', function (): void {
 });
 
 describe('reading a csv already in memory', function (): void {
-    /*
-     * A product reading an import out of a request body has nothing to
-     * give a path-based reader but a temp file it then has to clean up.
-     */
     it('reads content the same way it reads a file', function (): void {
         $csv = "name,email\nAda,ada@example.com\n";
 
@@ -451,7 +409,6 @@ describe('an uploaded csv', function (): void {
         expect(Reader::decode(base64_encode("name\nAda\n")))->toBe("name\nAda\n");
     });
 
-    /* Bounded before it is decoded: decoding first has already allocated it. */
     it('refuses an encoded payload too large to be worth decoding', function (): void {
         Reader::decode(str_repeat('A', (int) ceil(Reader::maxBytes() * 4 / 3) + 2_048));
     })->throws(RuntimeException::class, 'too large');

@@ -38,7 +38,6 @@ describe('naming the tables', function (): void {
     });
 
     it('generates version 7 identifiers, so rows sort by when they were written', function (): void {
-        // The version nibble is the first character of the third group.
         expect(explode('-', (new AuditLog)->newUniqueId())[2][0])->toBe('7');
     });
 });
@@ -71,7 +70,6 @@ describe('security headers', function (): void {
         expect(respond()->headers->get('Content-Security-Policy'))->toBeNull();
     });
 
-    /* A PDF the browser renders in a frame cannot be served frame-ancestors none. */
     it('lets a pdf be framed by the page that opened it', function (): void {
         $pdf = new Response('', 200, ['Content-Type' => 'application/pdf']);
 
@@ -89,11 +87,6 @@ describe('security headers', function (): void {
         expect(respond()->headers->get('Strict-Transport-Security'))->toBeNull();
     });
 
-    /*
-     * An API answers with data, so it needs no origin at all - not even
-     * its own. A policy wide enough for the pages is far wider than the
-     * routes that only ever return JSON.
-     */
     it('gives an api route a policy naming no origin at all', function (): void {
         $response = (new SecurityHeaders)->handle(Request::create('/api/plans'), fn () => new Response);
 

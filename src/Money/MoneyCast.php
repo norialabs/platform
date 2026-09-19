@@ -8,13 +8,6 @@ use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * An integer column read as Money, with the currency taken from a sibling
- * column where there is one.
- *
- * A fixed fallback would mislabel every amount belonging to any other
- * country, so the row is asked first and the configured default only
- * answers when the row says nothing.
- *
  * @implements CastsAttributes<Money, Money|int>
  */
 class MoneyCast implements CastsAttributes

@@ -17,9 +17,6 @@ beforeEach(function (): void {
         $this->markTestSkipped('Row level security is a Postgres feature.');
     }
 
-    // A superuser or a BYPASSRLS role ignores every policy, so a test run as
-    // one would pass on tables that are wide open. Skipping is the honest
-    // answer; the invariant check is what fails the deployment.
     if (Invariants::roleFailures() !== []) {
         $this->markTestSkipped('The connected role bypasses row level security.');
     }
@@ -147,11 +144,6 @@ it('stops a written row ever being changed', function (): void {
     });
 })->throws(QueryException::class, 'append-only');
 
-/*
- * All three carry the tenant column and all three sit outside tenancy on
- * purpose. Forgetting one turns the deployment check into a false alarm
- * that everybody learns to ignore.
- */
 it('does not report its own unscoped tables as unprotected', function (): void {
     expect(Invariants::tablesWithoutPolicy())
         ->not->toContain('audit_logs')

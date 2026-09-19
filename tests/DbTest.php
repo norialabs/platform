@@ -33,7 +33,6 @@ function dropRestoreTarget(): void
     }
 }
 
-/** A connection outside the test transaction, so a separate process can see the writes. */
 function committed(): Connection
 {
     return DB::connection('noria_pg_admin');
@@ -72,11 +71,6 @@ describe('tiering and retention', function (): void {
         config(['noria.db.disk' => 'backups']);
     });
 
-    /*
-     * An hourly dump answers this morning's mistake; a daily one answers
-     * the corruption nobody noticed for a fortnight. Keeping a fortnight of
-     * hourlies to get the second costs fourteen times the storage.
-     */
     it('keeps each tier for its own window', function (): void {
         $now = Carbon::now('UTC');
         $disk = Storage::disk('backups');
@@ -99,10 +93,6 @@ describe('tiering and retention', function (): void {
         expect(app(Backup::class)->prune('backups', BackupTier::Hourly))->toBe(0);
     });
 
-    /*
-     * The dump is already safe. Failing the run because the sweep failed
-     * would turn a storage bill into a missing backup.
-     */
     it('reports a failed sweep rather than losing the dump that succeeded', function (): void {
         config(['noria.db.tiers.hourly.prefix' => 'backups/hourly', 'noria.db.attempts' => 1]);
         Storage::shouldReceive('disk')->andThrow(new RuntimeException('the endpoint is gone'));
@@ -131,7 +121,6 @@ describe('tiering and retention', function (): void {
 });
 
 describe('guarding an identifier', function (): void {
-    /* A name on its way into DDL cannot be parameterised. */
     it('accepts a plain name', function (): void {
         expect(Identifier::of('zana_copy_1'))->toBe('zana_copy_1');
     });
@@ -167,7 +156,6 @@ describe('comparing two schemas', function (): void {
         expect($drift['blocking'])->toBe([]);
     });
 
-    /* The whole point: no row is lost quietly. */
     it('refuses to drop a table that still holds rows', function (): void {
         $drift = Schemas::drift(
             ['legacy' => ['id' => shapeOf('legacy', 'id')]],
@@ -218,7 +206,6 @@ describe('comparing two schemas', function (): void {
         expect($drift['blocking'][0])->toContain('status is new, not null and has no default');
     });
 
-    /* An empty table can change shape however it likes. */
     it('allows any change to a table holding nothing', function (): void {
         $drift = Schemas::drift(
             ['invoices' => ['total' => shapeOf('invoices', 'total', 'text')]],
@@ -245,12 +232,6 @@ describe('comparing two schemas', function (): void {
 });
 
 describe('a real dump and restore', function (): void {
-    /*
-     * Everything here runs on a second connection rather than the default
-     * one. RefreshDatabase holds the test inside a transaction, and pg_dump
-     * is a separate process: rows written on the default connection are
-     * uncommitted and the dump would come back without them.
-     */
     beforeEach(function (): void {
         if (DB::connection()->getDriverName() !== 'pgsql') {
             $this->markTestSkipped('A dump needs a real server.');
@@ -278,12 +259,6 @@ describe('a real dump and restore', function (): void {
         }
     });
 
-    /*
-     * Restored beside the live database rather than over it. A restore
-     * replays the dump as the role running it, so every table comes back
-     * owned by that role - doing it in place would take the application
-     * role's access to its own tables away.
-     */
     it('writes a dump that holds the rows, and puts them back', function (): void {
         $result = app(Backup::class)->run('backups');
 
@@ -338,11 +313,6 @@ describe('the preflight', function (): void {
         config(['noria.db.disk' => 'backups', 'noria.db.admin_connection' => null]);
     });
 
-    /*
-     * The failure this check exists for: pg_dump as a role that cannot
-     * bypass row level security writes a file that looks entirely normal
-     * and contains no rows at all.
-     */
     it('refuses to dump as a role that would produce an empty file', function (): void {
         app(Backup::class)->run('backups');
     })->throws(RuntimeException::class, 'bypass row level security');
@@ -355,12 +325,6 @@ describe('timezone aware timestamps', function (): void {
         }
     });
 
-    /*
-     * Eloquent writes a naive 'Y-m-d H:i:s'. Postgres reads that into a
-     * timestamptz using the session timezone, so a connection on
-     * Africa/Nairobi under an application on UTC stores every moment three
-     * hours out. Nothing errors; a sign-in code is simply born expired.
-     */
     it('refuses a connection whose timezone is not the application one', function (): void {
         DB::statement("set time zone 'Africa/Nairobi'");
 

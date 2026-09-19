@@ -10,12 +10,6 @@ use Illuminate\Support\Facades\Config;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 
 /**
- * Stamps the current workspace onto a row as it is created.
- *
- * Without it every insert has to name its own workspace, and the one that
- * forgets is refused by the policy's with check - or, on a nullable column,
- * writes an orphan nobody can read again.
- *
  * @property string|null $workspace_id
  */
 trait BelongsToWorkspace
@@ -36,8 +30,6 @@ trait BelongsToWorkspace
     }
 
     /**
-     * Scoped to one workspace explicitly, for a report that crosses several.
-     *
      * @param  Builder<static>  $query
      * @return Builder<static>
      */

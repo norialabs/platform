@@ -11,17 +11,6 @@ use NoriaLabs\Platform\Contracts\PermissionAction;
 use NoriaLabs\Platform\Contracts\PermissionResource;
 
 /**
- * A role's permission document, validated against the product's catalogue.
- * The wildcard is legal in either position and only ever written by a system
- * role.
- *
- *     {"account": ["view", "create"], "deal": ["view", "advance"]}
- *     {"*": ["*"]}
- *
- * A value object rather than a bare array, because the array form was
- * written by a request body or by an older version of this class and both
- * have to be treated as untrusted on the way in.
- *
  * @implements Arrayable<string, list<string>>
  */
 final class Permissions implements Arrayable, JsonSerializable
@@ -77,7 +66,6 @@ final class Permissions implements Arrayable, JsonSerializable
         return new self($grants);
     }
 
-    /** Everything both documents grant, for a principal holding two roles. */
     public function merge(self ...$others): self
     {
         $merged = $this->grants;
@@ -91,11 +79,6 @@ final class Permissions implements Arrayable, JsonSerializable
         return new self($merged);
     }
 
-    /**
-     * Trimmed to what a ceiling also grants. An invited member cannot be
-     * given more than the person inviting them holds, and a plan downgrade
-     * has to take away what the plan no longer covers.
-     */
     public function withinCeiling(?self $ceiling): self
     {
         if ($ceiling === null || $ceiling->grantsEverything()) {
@@ -136,11 +119,6 @@ final class Permissions implements Arrayable, JsonSerializable
     }
 
     /**
-     * The catalogue a settings screen renders, derived from the enums so
-     * it cannot drift from the values the gates actually check. Narrowed
-     * to one scope where the product has more than one side: a tenant
-     * role must never be offered a platform resource.
-     *
      * @return list<array{resource: string, label: string, actions: list<array{action: string, label: string, granted: bool}>}>
      */
     public function catalog(?string $scope = null): array
@@ -252,13 +230,6 @@ final class Permissions implements Arrayable, JsonSerializable
         return is_scalar($action) ? (string) $action : '';
     }
 
-    /**
-     * The stored key for a resource or a verb.
-     *
-     * BackedEnum::$value is string|int and the column is a string, so an
-     * int backed catalogue is normalised rather than refused: which keys a
-     * product uses is the product's decision, not this package's.
-     */
     private static function key(PermissionResource|PermissionAction $case): string
     {
         return (string) $case->value;

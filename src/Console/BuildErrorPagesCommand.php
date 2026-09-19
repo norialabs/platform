@@ -11,13 +11,6 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Vite;
 use Throwable;
 
-/**
- * Renders the error views to self-contained files the edge can serve.
- *
- * A 502 or a 504 means the application is not answering, so the page for
- * it cannot be rendered by the application. The stylesheet is inlined for
- * the same reason: at that moment nothing is serving assets either.
- */
 class BuildErrorPagesCommand extends Command
 {
     protected $signature = 'noria:build-error-pages';
@@ -55,9 +48,6 @@ class BuildErrorPagesCommand extends Command
                 return self::FAILURE;
             }
 
-            // Resolved to a path and rendered as a file: the name is built
-            // from config at runtime, and make() is typed for names known
-            // at author time.
             File::put(public_path("{$code}.html"), View::file(View::getFinder()->find($view))->render());
             $this->components->twoColumnDetail("public/{$code}.html", 'written');
         }

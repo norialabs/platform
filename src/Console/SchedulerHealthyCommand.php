@@ -7,11 +7,6 @@ namespace NoriaLabs\Platform\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
-/**
- * The scheduler container's healthcheck. A scheduler that is running but
- * never firing looks identical to a healthy one from outside, so the
- * heartbeat is written by a scheduled task and read by this.
- */
 class SchedulerHealthyCommand extends Command
 {
     protected $signature = 'noria:scheduler-healthy';

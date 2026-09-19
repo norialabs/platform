@@ -49,10 +49,6 @@ describe('a permission document', function (): void {
         Permissions::fromArray(['invoice' => ['teleport']]);
     })->throws(InvalidArgumentException::class, 'teleport');
 
-    /*
-     * The check that stops a settings screen offering a delete button for
-     * something nothing can delete.
-     */
     it('refuses a verb the resource does not admit', function (): void {
         Permissions::fromArray(['report' => ['delete']]);
     })->throws(InvalidArgumentException::class, 'does not support');
@@ -127,10 +123,6 @@ describe('resolving what a caller may do', function (): void {
         expect($resolver->allows(new User, Resource::Invoice, Action::Delete))->toBeFalse();
     });
 
-    /*
-     * A token narrower than the person holding it. The role is not wrong,
-     * it is being exercised through a smaller door.
-     */
     it('caps a role at what the credential allows', function (): void {
         StubPrincipals::$principal = new StubPrincipal('tenant', ['admin']);
         StubRoles::$grants = ['admin' => ['invoice' => ['view', 'delete']]];
@@ -168,11 +160,6 @@ describe('resolving what a caller may do', function (): void {
 });
 
 describe('a token as a ceiling', function (): void {
-    /*
-     * A token narrows a role and can never widen one, so the abilities are
-     * read as a permission document and applied over whatever the roles
-     * granted.
-     */
     it('allows only what the abilities name', function (): void {
         $user = new TokenHolder(['workspace:01a0b000-0000-7000-8000-00000000000a', 'invoice:view']);
 
@@ -186,7 +173,6 @@ describe('a token as a ceiling', function (): void {
         expect((new TokenCeiling)->for(new TokenHolder(['*']))?->grantsEverything())->toBeTrue();
     });
 
-    /* A person at a keyboard is bounded by their roles alone. */
     it('imposes no ceiling on somebody who arrived by session', function (): void {
         expect((new TokenCeiling)->for(new TokenHolder(null)))->toBeNull();
     });
@@ -211,7 +197,6 @@ describe('the token vocabulary', function (): void {
             ->toBe('01a0b000-0000-7000-8000-00000000000a');
     });
 
-    /* A token naming two workspaces is as unscoped as one naming none. */
     it('reads no workspace from a token that names two', function (): void {
         expect(TokenAbilities::workspaceIn([
             'workspace:01a0b000-0000-7000-8000-00000000000a',
@@ -248,10 +233,6 @@ describe('the token vocabulary', function (): void {
 describe('a catalogue with more than one side', function (): void {
     beforeEach(fn () => config(['noria.rbac.resources' => SidedResource::class]));
 
-    /*
-     * A settings screen that lists every resource offers a tenant admin
-     * the platform ledger. Scope is what stops that.
-     */
     it('offers only the resources belonging to that side', function (): void {
         expect(array_map(fn ($r) => $r->value, Catalog::forScope('tenant')))
             ->toBe(['invoice', 'report']);
@@ -269,7 +250,6 @@ describe('a catalogue with more than one side', function (): void {
         expect(Permissions::none()->catalog())->toHaveCount(3);
     });
 
-    /* A product with one side has nothing to filter. */
     it('returns everything when the resources say nothing about scope', function (): void {
         config(['noria.rbac.resources' => Resource::class]);
 

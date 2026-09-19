@@ -9,14 +9,6 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use NoriaLabs\Platform\Platform;
 
-/**
- * The three things that have to be true for one workspace to be sealed off
- * from the next, asked of the live connection rather than of the migration
- * source.
- *
- * Properties of a deployment rather than of a request, so they are checked
- * at boot and on a clock, never in the request path.
- */
 class Invariants
 {
     /** @return list<string> every way the connected role is more powerful than it should be */
@@ -100,14 +92,6 @@ class Invariants
     }
 
     /**
-     * The product's list, plus the package's own tables.
-     *
-     * All three carry the tenant column and all three sit outside tenancy
-     * on purpose: the trail outlives the workspace it describes, and a
-     * sign-in code and an invitation are both read before anybody knows
-     * which workspace they belong to. Resolved through Platform so a host
-     * that renamed one does not have to declare it again.
-     *
      * @return list<string>
      */
     private static function unscoped(): array

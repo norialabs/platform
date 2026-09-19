@@ -65,18 +65,11 @@ it('puts the workspace back even when the work throws', function (): void {
     try {
         $tenancy->run('01a0b000-0000-7000-8000-000000000002', fn () => throw new RuntimeException('boom'));
     } catch (RuntimeException) {
-        // The point is what the connection holds afterwards.
     }
 
     expect($tenancy->id())->toBe('01a0b000-0000-7000-8000-000000000001');
 });
 
-/*
- * The whole reason clear() resets a list rather than one setting. A pooled
- * connection still holding staff_read reads every workspace for every
- * request after, and this is the drift that had already happened between
- * two of our products.
- */
 it('clears every widening setting on the way out, not only the workspace', function (): void {
     $tenancy = app(Tenancy::class);
     $tenancy->set('01a0b000-0000-7000-8000-000000000001');
@@ -92,11 +85,6 @@ it('clears every widening setting on the way out, not only the workspace', funct
     expect(guc('app.workspace_id'))->toBe('');
 });
 
-/*
- * A setting clear() does not know about is a setting that outlives the
- * request that set it, so a new one cannot be introduced without being
- * added to the list that resets it.
- */
 it('refuses a setting nobody has arranged to clear', function (): void {
     app(Tenancy::class)->withGuc(['app.undeclared' => 'on'], fn () => null);
 })->throws(TenancyMissing::class, 'app.undeclared');
@@ -145,10 +133,6 @@ describe('the middleware', function (): void {
         expect(app(Tenancy::class)->id())->toBeNull();
     });
 
-    /*
-     * Not optional. The setting is session scoped, so a pooled connection
-     * would serve the next caller somebody else's data.
-     */
     it('takes the workspace back off on the way out', function (): void {
         StubWorkspaces::$workspaceId = '01a0b000-0000-7000-8000-00000000000a';
 
@@ -179,11 +163,6 @@ describe('stamping a row', function (): void {
         });
     });
 
-    /*
-     * Without this every insert has to name its own workspace, and the one
-     * that forgets is refused by the policy - or writes an orphan nobody
-     * can read again.
-     */
     it('puts the current workspace on a row as it is written', function (): void {
         app(Tenancy::class)->run('01a0b000-0000-7000-8000-00000000000a', function (): void {
             Widget::query()->create(['name' => 'ours']);
@@ -224,11 +203,6 @@ describe('stamping a row', function (): void {
 describe('a queued job', function (): void {
     beforeEach(fn () => CountWidgets::$ranInside = null);
 
-    /*
-     * A job with no workspace set matches nothing, succeeds, and leaves
-     * the work undone. It carries an id and never a model, because a
-     * serialised model is the row as it was when the job was queued.
-     */
     it('runs inside the workspace it was queued for', function (): void {
         app()->call([new CountWidgets('01a0b000-0000-7000-8000-00000000000a'), 'handle']);
 
@@ -247,7 +221,6 @@ describe('a queued job', function (): void {
         expect((new CountWidgets('01a0b000-0000-7000-8000-00000000000a'))->queue)->toBe('slow');
     });
 
-    /* One customer must not wait on another customer's file. */
     it('holds a lock per workspace rather than per job class', function (): void {
         $first = new CountWidgets('01a0b000-0000-7000-8000-00000000000a');
         $second = new CountWidgets('01a0b000-0000-7000-8000-00000000000b');

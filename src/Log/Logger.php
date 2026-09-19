@@ -10,12 +10,6 @@ use Illuminate\Support\Facades\Log;
 use NoriaLabs\Platform\Contracts\LogContext;
 use Throwable;
 
-/**
- * Log::info with the context scrubbed first.
- *
- * Used instead of the facade everywhere a payload could carry a credential
- * or somebody's phone number, which in these products is almost everywhere.
- */
 final class Logger
 {
     private function __construct() {}
@@ -39,11 +33,6 @@ final class Logger
     }
 
     /**
-     * The throwable is handed over whole rather than flattened to a class
-     * and a message: Monolog's formatter renders the trace and every
-     * previous cause, and a line saying what failed without saying where
-     * is the one nobody can act on.
-     *
      * @param  array<array-key, mixed>  $context
      */
     public static function exception(string $message, Throwable $e, array $context = [], string $level = 'error'): void
@@ -57,12 +46,6 @@ final class Logger
     }
 
     /**
-     * Any other channel the product defined.
-     *
-     * Named rather than magic: __callStatic would read better at the call
-     * site and is invisible to static analysis, which every product in
-     * this estate runs at max.
-     *
      * @param  array<array-key, mixed>  $context
      */
     public static function create(string $channel, string $message, array $context = [], string $level = 'info'): void
@@ -73,14 +56,8 @@ final class Logger
     /** @param array<array-key, mixed> $context */
     private static function write(string $channel, string $message, array $context, string $level): void
     {
-        // Ambient first, so a caller naming the same key wins: the line
-        // knows more about itself than the request does.
         $scrubbed = Redactor::scrub([...self::ambient(), ...$context]);
 
-        // Asking the log manager for a channel that is not defined throws,
-        // which it catches by writing an EMERGENCY entry alongside the real
-        // one. Falling back keeps a product that has not defined our
-        // channels to a single line.
         if (Config::get('logging.channels.'.$channel) === null) {
             Log::log($level, $message, $scrubbed);
 

@@ -10,9 +10,6 @@ use NoriaLabs\Platform\Concerns\AppendOnly;
 use NoriaLabs\Platform\Platform;
 
 /**
- * Written only by AuditRecorder. Survives a workspace purge, redacted rather
- * than deleted, which is why it is outside tenancy.
- *
  * @property string $id
  * @property string|null $workspace_id
  * @property string|null $actor_id

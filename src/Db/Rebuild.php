@@ -13,19 +13,6 @@ use Illuminate\Support\Facades\Process;
 use RuntimeException;
 use Throwable;
 
-/**
- * Rebuilds the schema from the current migrations and puts the existing
- * rows back into it.
- *
- * Migrations edited in place rather than added to leave a long-lived
- * database behind for good: migrate sees every file already run, and the
- * gap only surfaces as a missing relation somewhere deep inside a request.
- * The way out is to rebuild from the files and reload the data.
- *
- * Nothing is deleted. The copy is taken first and kept until the rebuilt
- * database has been verified row for row against it, and if anything
- * fails the error says how to swap them back.
- */
 class Rebuild
 {
     /**
@@ -76,10 +63,6 @@ class Rebuild
             $rebuilt = $this->connectTo($maintenance, $database);
             $deferred = $this->unvalidatedChecks($rebuilt);
 
-            // A constraint added NOT VALID grandfathers the rows that were
-            // there when it landed. Reloading those rows through it would
-            // fail, so it comes off and goes back on afterwards, still not
-            // validated, which is what it was.
             if ($deferred !== []) {
                 $report(sprintf(
                     'Holding back %d constraint(s) that grandfather existing rows: %s.',
@@ -142,11 +125,6 @@ class Rebuild
     }
 
     /**
-     * migrate:fresh drops tables, views and types and leaves routines
-     * standing. One owned by a role the migrations no longer run as cannot
-     * be recreated, which stops a rebuild halfway; one deleted from the
-     * migrations would otherwise survive every rebuild forever.
-     *
      * @param  callable(string): void  $report
      * @return list<string>
      */
@@ -207,7 +185,6 @@ class Rebuild
         }
     }
 
-    /** A client older than the server refuses to read the database at all. */
     private function assertToolsMatchServer(Connection $admin): void
     {
         $server = self::number($admin->scalar("select current_setting('server_version_num')::int / 10000"));
@@ -258,9 +235,6 @@ class Rebuild
     }
 
     /**
-     * Runs the migrations against an empty database and compares what they
-     * build with what is live, before anything is touched.
-     *
      * @param  array<string, mixed>  $settings
      * @param  array<string, mixed>  $maintenance
      * @param  array<string, array<string, ColumnShape>>  $shape
@@ -531,8 +505,6 @@ class Rebuild
     }
 
     /**
-     * The product's own last word on whether the rebuilt database is sound.
-     *
      * @param  callable(string): void  $report
      */
     private function verify(callable $report): void

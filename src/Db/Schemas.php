@@ -7,9 +7,6 @@ namespace NoriaLabs\Platform\Db;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 
-/**
- * What this database looks like, and what changes between two shapes of it.
- */
 final class Schemas
 {
     private function __construct() {}
@@ -25,9 +22,6 @@ final class Schemas
     }
 
     /**
-     * A predicate restricting a catalog query to those schemas, so a rebuild
-     * never reads a table that belongs to an extension.
-     *
      * @return array{sql: string, bindings: list<string>}
      */
     public static function filter(string $column, ?Connection $connection = null): array
@@ -40,7 +34,6 @@ final class Schemas
         ];
     }
 
-    /** Recreates the non-public schemas a fresh database would otherwise lack. */
     public static function ensure(Connection $connection): void
     {
         foreach (self::owned($connection) as $schema) {
@@ -51,8 +44,6 @@ final class Schemas
     }
 
     /**
-     * Every column of every table, keyed table then column.
-     *
      * @param  list<string>  $ignore
      * @return array<string, array<string, ColumnShape>>
      */
@@ -86,13 +77,6 @@ final class Schemas
     }
 
     /**
-     * What moving from the live shape to the rebuilt one would cost.
-     *
-     * A table or column the migrations no longer define is discarded when it
-     * is empty and blocking when it is not: the point of the exercise is
-     * that no row is lost quietly. $held answers how many rows a table has,
-     * or how many non-null values a column has.
-     *
      * @param  array<string, array<string, ColumnShape>>  $live
      * @param  array<string, array<string, ColumnShape>>  $rebuilt
      * @param  callable(string, ?string): int  $held
@@ -138,7 +122,6 @@ final class Schemas
                     continue;
                 }
 
-                // An empty table can change shape however it likes.
                 if (! $populated) {
                     continue;
                 }

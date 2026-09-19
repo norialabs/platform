@@ -8,34 +8,16 @@ use Generator;
 use Illuminate\Support\Facades\Config;
 use RuntimeException;
 
-/**
- * Reading the file somebody actually has: a UTF-8 byte order mark from
- * Excel, semicolon or tab separators from older exports, headers that are
- * padded, mixed case and duplicated.
- *
- * Pure - a path in, rows out, no database and no container - so the awkward
- * cases are unit tests.
- */
 final class Reader
 {
-    /** Enough rows to recognise what a column holds without reading somebody's whole customer list. */
     public const SAMPLE_ROWS = 8;
 
-    /**
-     * fgetcsv reads until a newline, so a 200MB file on one line would
-     * exhaust a worker before any row limit could refuse it. Passed to
-     * fgetcsv so the memory is never allocated at all.
-     */
     public const MAX_LINE_BYTES = 1_048_576;
 
     private const DELIMITERS = [',', ';', "\t", '|'];
 
     private const BOM = "\xEF\xBB\xBF";
 
-    /**
-     * A ceiling on an uploaded file. An import that arrives in a request
-     * body has to be bounded before it is decoded, not after.
-     */
     public const MAX_BYTES = 5_242_880;
 
     /**
@@ -48,12 +30,6 @@ final class Reader
         public readonly string $delimiter,
     ) {}
 
-    /**
-     * The same file already in memory, as an upload arrives.
-     *
-     * A product that reads a CSV out of a request body has nothing to give
-     * a path-based reader but a temporary file it then has to clean up.
-     */
     public static function previewContent(string $csv): self
     {
         return self::previewStream(self::memory($csv));
@@ -67,7 +43,6 @@ final class Reader
         yield from self::rowsIn(self::memory($csv));
     }
 
-    /** Data rows, not counting the header. */
     public static function countContent(string $csv): int
     {
         $count = 0;
@@ -79,11 +54,6 @@ final class Reader
         return $count;
     }
 
-    /**
-     * An upload arrives base64 encoded as often as it arrives as a file,
-     * and is bounded before it is decoded: a caller that decodes first has
-     * already allocated whatever was sent.
-     */
     public static function decode(string $data): string
     {
         $encodedCeiling = (int) ceil(self::maxBytes() * 4 / 3) + 1_024;
@@ -102,8 +72,6 @@ final class Reader
     }
 
     /**
-     * Rules for the two shapes an upload arrives in.
-     *
      * @return array<string, list<string>>
      */
     public static function uploadRules(string $file = 'csv', string $encoded = 'data_base64'): array
@@ -121,7 +89,6 @@ final class Reader
         return Config::integer('noria.csv.max_bytes', self::MAX_BYTES);
     }
 
-    /** The headers and a few rows, which is all a mapping needs to be decided. */
     public static function preview(string $path): self
     {
         return self::previewStream(self::open($path));
@@ -149,10 +116,6 @@ final class Reader
     }
 
     /**
-     * A generator rather than an array: 50,000 rows held in memory alongside
-     * the models each one creates is an import that works in testing and
-     * dies in production.
-     *
      * @return Generator<int, array<string, string>>
      */
     public static function rows(string $path): Generator
@@ -169,7 +132,6 @@ final class Reader
         $delimiter = self::sniffStream($handle);
         $headers = self::headersFrom($handle, $delimiter);
 
-        // One-based and counting the header, because that is what the spreadsheet shows.
         $line = 1;
 
         try {
@@ -187,11 +149,6 @@ final class Reader
         }
     }
 
-    /**
-     * Counted from the header line rather than asked for: a semicolon
-     * separated export looks to a comma parser like one very wide column,
-     * and then fails about a missing name field.
-     */
     public static function sniff(string $path): string
     {
         $handle = self::open($path);
@@ -204,9 +161,6 @@ final class Reader
     }
 
     /**
-     * Read from the handle and rewound, so the caller reads the header
-     * itself rather than losing it to the sniff.
-     *
      * @param  resource  $handle
      */
     private static function sniffStream($handle): string
@@ -235,11 +189,6 @@ final class Reader
         return $best;
     }
 
-    /**
-     * A header reduced to the form a mapping is keyed on. "Business Name",
-     * "business name" and "Business  Name " are one column to everybody
-     * except a string comparison.
-     */
     public static function key(string $header): string
     {
         $key = mb_strtolower(trim(self::stripBom($header)));
@@ -266,12 +215,10 @@ final class Reader
         foreach ($row as $index => $value) {
             $header = trim(self::stripBom((string) $value));
 
-            // An unnamed column still has data under it. Named by position so it can be mapped.
             if ($header === '') {
                 $header = 'Column '.($index + 1);
             }
 
-            // Two columns called Phone are two columns, not one overwriting the other per row.
             $occurrence = ($seen[$header] ?? 0) + 1;
             $seen[$header] = $occurrence;
 
@@ -291,7 +238,6 @@ final class Reader
         $combined = [];
 
         foreach ($headers as $index => $header) {
-            // A short row is normal: half these tools drop trailing empty columns.
             $combined[$header] = trim((string) ($row[$index] ?? ''));
         }
 

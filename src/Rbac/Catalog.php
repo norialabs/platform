@@ -11,12 +11,6 @@ use NoriaLabs\Platform\Contracts\PermissionResource;
 use NoriaLabs\Platform\Contracts\ScopedPermissionResource;
 use RuntimeException;
 
-/**
- * The product's resource and action enums, read from config.
- *
- * Every grant is validated against this, so a role document cannot name a
- * resource the product does not have or a verb the resource does not admit.
- */
 final class Catalog
 {
     /** @return list<PermissionResource> */
@@ -48,11 +42,6 @@ final class Catalog
     }
 
     /**
-     * The resources belonging to one side of the product.
-     *
-     * A catalogue whose resources say nothing about scope returns all of
-     * them: a product with one side has nothing to filter.
-     *
      * @return list<PermissionResource>
      */
     public static function forScope(string $scope): array

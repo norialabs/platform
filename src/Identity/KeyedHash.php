@@ -7,15 +7,6 @@ namespace NoriaLabs\Platform\Identity;
 use Illuminate\Support\Facades\Config;
 use RuntimeException;
 
-/**
- * Keyed SHA-256, for a value this system must look up and must never read
- * back: one-time codes, invitation tokens, and the destinations both are
- * sent to.
- *
- * The key is what makes it unguessable - a plain digest of a Kenyan mobile
- * is 10^8, seconds of work - and it is not in the database, so a dump of
- * the table alone reverses nothing.
- */
 final class KeyedHash
 {
     public function __construct(private ?string $key = null) {}
@@ -30,10 +21,6 @@ final class KeyedHash
         return hash_equals($hash, $this->of($value));
     }
 
-    /**
-     * Its own key where the product set one, so rotating the application
-     * key does not orphan every outstanding invitation at once.
-     */
     private function key(): string
     {
         if ($this->key !== null && $this->key !== '') {

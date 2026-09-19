@@ -7,11 +7,6 @@ namespace NoriaLabs\Platform\Db\Dumpers;
 use NoriaLabs\Platform\Contracts\DatabaseDumper;
 use RuntimeException;
 
-/**
- * A copy of the file. There is no server to ask, and sqlite3 .dump would
- * turn a binary file that restores instantly into text that has to be
- * replayed.
- */
 class SqliteDumper implements DatabaseDumper
 {
     public function driver(): string

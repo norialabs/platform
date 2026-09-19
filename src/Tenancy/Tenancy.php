@@ -11,17 +11,6 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use NoriaLabs\Platform\Platform;
 
-/**
- * The workspace a connection is currently allowed to see, held as Postgres
- * session settings that the row level security policies read.
- *
- * Every setting a policy reads has to be declared in noria.tenancy.gucs,
- * because clear() resets exactly that list. Two of them widen what a
- * connection can see rather than narrowing it, and the unwind is allowed to
- * fail - so a pooled connection still holding staff_read would read every
- * workspace for every request after. A setting clear() does not know about
- * is a setting that outlives the request that set it.
- */
 class Tenancy
 {
     private ?string $workspaceId = null;
@@ -45,17 +34,10 @@ class Tenancy
         $this->pushGuc($this->workspaceGuc(), $workspaceId);
     }
 
-    /**
-     * End of request, or end of test: neither the workspace nor the identity
-     * outlives it. Belt and braces for the settings withGuc already restores,
-     * because that restore may fail silently on a dropped connection and this
-     * one is about to serve somebody else.
-     */
     public function clear(): void
     {
         $this->workspaceId = null;
 
-        // One statement, because this runs on the way out of every request.
         $this->pushGucs(array_fill_keys($this->declared(), ''));
     }
 
@@ -105,9 +87,6 @@ class Tenancy
     }
 
     /**
-     * Reads across every workspace, for an operator screen or a platform
-     * report. Never reachable from a tenant request.
-     *
      * @template TReturn
      *
      * @param  Closure(): TReturn  $callback
@@ -119,9 +98,6 @@ class Tenancy
     }
 
     /**
-     * The sanctioned write path for platform-wide rows: seeders and platform
-     * admin services, and nothing else.
-     *
      * @template TReturn
      *
      * @param  Closure(): TReturn  $callback
@@ -137,14 +113,8 @@ class Tenancy
         try {
             $reset();
         } catch (QueryException) {
-            // A connection that refused the statement still holds what was
-            // set, so forgetting our memory of it makes the next push write
-            // all of them again.
             $this->gucs = [];
 
-            // Dropping the connection is the certain fix, and cannot be done
-            // inside a transaction where the rollback already coming resets
-            // every setting anyway.
             if ($this->connection()->transactionLevel() === 0) {
                 DB::disconnect(Platform::connection());
             }
@@ -163,18 +133,10 @@ class Tenancy
     }
 
     /**
-     * Always issued, never skipped because the value looks unchanged: a
-     * connection that dropped and came back has none of these set while this
-     * object still remembers them.
-     *
      * @param  array<string, string>  $settings
      */
     private function pushGucs(array $settings): void
     {
-        // A product with no tenancy still resolves this class through the
-        // middleware and the job base. Off, it remembers the workspace and
-        // writes no settings, rather than making every product that has no
-        // tenants depend on Postgres.
         if ($settings === [] || ! Config::boolean('noria.tenancy.enabled', true)) {
             return;
         }

@@ -13,15 +13,6 @@ use NoriaLabs\Platform\Identity\Destination;
 use NoriaLabs\Platform\Identity\KeyedHash;
 use NoriaLabs\Platform\Platform;
 
-/**
- * Issuing and checking a one-time code, and nothing else: no user lookup,
- * no mail, no session, because those answers differ per product and this
- * does not.
- *
- * Neither the code nor the address it went to is stored in clear. A dump of
- * this table signs nobody in and tells nobody who was signing in; the hint
- * is the part a screen can show back.
- */
 class Otp
 {
     public function __construct(private KeyedHash $hash) {}
@@ -41,8 +32,6 @@ class Otp
 
         $code = $this->code();
 
-        // Two live codes means the newest message is not reliably the one
-        // that works.
         $this->pending($to)->delete();
 
         Platform::otpChallengeModel()::query()->create([
@@ -73,8 +62,6 @@ class Otp
             return OtpOutcome::Exhausted;
         }
 
-        // Counted before the comparison, so a crash mid-check costs an
-        // attempt rather than granting an unlimited supply of them.
         $challenge->increment('attempts');
 
         if (! Hash::check($code, $challenge->code_hash)) {
@@ -86,11 +73,6 @@ class Otp
         return OtpOutcome::Verified;
     }
 
-    /**
-     * How long until this destination may ask for another code, or null
-     * when it may ask now. Counted on the row rather than in the cache, so
-     * a restart does not hand out a fresh allowance.
-     */
     public function secondsUntilNextIssue(Destination $to): ?int
     {
         $throttle = Config::integer('noria.auth.otp.throttle', 60);
@@ -115,7 +97,6 @@ class Otp
         return $ready->isFuture() ? (int) ceil(now()->diffInSeconds($ready, absolute: true)) : null;
     }
 
-    /** Rows nobody will use again. Consumed ones are kept for the trail until they age out. */
     public function prune(int $days = 7): int
     {
         $deleted = Platform::otpChallengeModel()::query()
@@ -133,10 +114,6 @@ class Otp
             ->whereNull('consumed_at');
     }
 
-    /**
-     * Digits only, and never starting with a zero that a spreadsheet or an
-     * input mask would eat.
-     */
     private function code(): string
     {
         $length = max(4, Config::integer('noria.auth.otp.length', 6));

@@ -6,7 +6,6 @@ namespace NoriaLabs\Platform\Tests\Fixtures;
 
 use Illuminate\Foundation\Auth\User;
 
-/** Somebody holding a token, or nobody holding one. */
 class TokenHolder extends User
 {
     /** @param list<string>|null $abilities */

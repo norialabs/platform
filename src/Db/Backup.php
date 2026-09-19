@@ -13,14 +13,6 @@ use NoriaLabs\Platform\Log\Logger;
 use RuntimeException;
 use Throwable;
 
-/**
- * Takes a dump, puts it on the configured disk, promotes the first one
- * after the daily boundary, and prunes each tier to its own retention.
- *
- * Written to a local file first even when the disk is remote, because the
- * tools write to a path and not to a stream, and a half-uploaded object is
- * worse than no object.
- */
 class Backup
 {
     public function __construct(private DumperFactory $dumpers) {}
@@ -41,8 +33,6 @@ class Backup
 
             $bytes = (int) @filesize($path);
 
-            // A dump of nothing is the shape an unprivileged role produces,
-            // and the preflight does not catch every way of getting there.
             if ($bytes === 0) {
                 throw new RuntimeException('The dump is empty.');
             }
@@ -66,7 +56,6 @@ class Backup
         }
     }
 
-    /** The newest dump across both tiers. */
     public function latestKey(?string $disk = null): string
     {
         $disk ??= Config::string('noria.db.disk', 'local');
@@ -124,8 +113,6 @@ class Backup
 
             return count($stale);
         } catch (Throwable $e) {
-            // The dump is already safe. Failing the whole run because the
-            // sweep failed would turn a storage bill into a missing backup.
             Logger::exception('backup uploaded but could not prune older dumps', $e, ['tier' => $tier->value]);
 
             return 0;
@@ -137,10 +124,6 @@ class Backup
         return Storage::disk($disk ?? Config::string('noria.db.disk', 'local'));
     }
 
-    /**
-     * The first dump taken after the daily hour is the one kept for a
-     * month; every other dump that day is hourly.
-     */
     private function dueTier(string $disk): BackupTier
     {
         $boundary = Carbon::now('UTC')->startOfDay()
@@ -206,9 +189,6 @@ class Backup
     }
 
     /**
-     * The files in one tier, retried, and narrowed to what they have to be
-     * before anything downstream trusts them.
-     *
      * @return list<string>
      */
     private function filesIn(string $disk, BackupTier $tier): array
@@ -219,9 +199,6 @@ class Backup
     }
 
     /**
-     * Object storage fails in ways a local disk does not, and once the disk
-     * swallows the reason a failed upload looks identical to a rejected one.
-     *
      * @param  Closure(): mixed  $work
      */
     private function overNetwork(Closure $work): mixed
@@ -242,8 +219,6 @@ class Backup
         $database = preg_replace('/[^A-Za-z0-9_-]/', '_', Connections::value($settings, 'database', 'database'));
         $database = is_string($database) && $database !== '' ? $database : 'database';
 
-        // Named so it sorts chronologically and takenAt can read it back:
-        // the tier sweep has no other way to know a file's age.
         $stamp = Carbon::now('UTC')->format('Ymd-His');
         $suffix = substr(bin2hex(random_bytes(3)), 0, 6);
 

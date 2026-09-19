@@ -9,9 +9,6 @@ use Illuminate\Support\Facades\Config;
 use NoriaLabs\Platform\Platform;
 use NoriaLabs\Platform\Tenancy\Tenancy;
 
-/**
- * The sole writer of the audit trail, injected wherever a decision needs one.
- */
 class AuditRecorder
 {
     public function __construct(

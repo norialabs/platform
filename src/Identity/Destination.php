@@ -6,15 +6,6 @@ namespace NoriaLabs\Platform\Identity;
 
 use Stringable;
 
-/**
- * An email address or a phone number, normalised to the one spelling the
- * rest of the system stores and hashes.
- *
- * Every path that identifies a person by a channel - one-time codes,
- * invitations, social email matching, account linking - parses through
- * here, because two spellings of one address that hash differently are two
- * accounts for one person.
- */
 final class Destination implements Stringable
 {
     public const MAX_LENGTH = 128;
@@ -42,17 +33,11 @@ final class Destination implements Stringable
         return self::tryFrom($raw, $country) !== null;
     }
 
-    /** Whether this destination is the kind the named channel can deliver to. */
     public function suits(Channel $channel): bool
     {
         return $this->isEmail === $channel->needsEmail();
     }
 
-    /**
-     * Enough to recognise which of your addresses was used, never enough to
-     * reconstruct one you have not seen. The only form of a destination
-     * ever stored in clear.
-     */
     public function masked(): string
     {
         if (! $this->isEmail) {
