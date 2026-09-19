@@ -114,6 +114,28 @@ return [
                 'script-src' => ["'self'"],
                 'connect-src' => ["'self'"],
             ],
+            /*
+             * An API answers with data, so it needs no origin at all - not
+             * even its own. Matched with Request::is patterns.
+             */
+            'api' => [
+                'paths' => ['api/*'],
+                'directives' => [
+                    'default-src' => ["'none'"],
+                    'frame-ancestors' => ["'none'"],
+                    'base-uri' => ["'none'"],
+                    'form-action' => ["'none'"],
+                ],
+            ],
+
+            /*
+             * While the dev server is hot it serves assets from its own
+             * origin, so a policy naming only 'self' blocks every script
+             * the page needs. Local only.
+             */
+            'dev_origin' => (bool) env('NORIA_CSP_DEV_ORIGIN', true),
+            'dev_origin_directives' => ['script-src', 'style-src', 'font-src'],
+
             'permissions_policy' => 'camera=(), microphone=(), geolocation=(), payment=()',
             'hsts_max_age' => (int) env('NORIA_HSTS_MAX_AGE', 31_536_000),
         ],
