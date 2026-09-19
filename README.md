@@ -106,7 +106,7 @@ Masked rather than dropped: a support ticket saying the token ended `9f` is answ
 `[redacted]` is not.
 
 This is the front of the pipe, not the transport. It scrubs and hands off to whatever channel the
-product configured, so it composes with `thekiharani/laravel-cwl` rather than replacing it:
+product configured, so it composes with `norialabs/cloudwatch` rather than replacing it:
 
 ```
 Logger::auth('otp issued', ['phone' => '254712345678'])   scrubbed here
