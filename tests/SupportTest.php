@@ -393,3 +393,27 @@ describe('trusting a proxy in the middleware', function (): void {
         expect(throughProxy())->toBe('203.0.113.9');
     });
 });
+
+describe('rounding a quantity up to a step', function (): void {
+    /*
+     * A tariff slab is units times a rate, and units are fractional - a
+     * meter reads 12.4. Making that an integer first truncates before the
+     * rounding that was the point.
+     */
+    it('carries a fractional amount all the way into the rounding', function (): void {
+        expect(Money::roundUpMinor(1234.4, 'KES'))->toBe(1300);
+        expect(Money::roundUpMinor(1200.0, 'KES'))->toBe(1200);
+    });
+
+    it('rounds to the step the currency can actually show', function (): void {
+        expect(Money::roundUpMinor(1234.4, 'USD'))->toBe(1235);
+    });
+
+    it('agrees with the instance form for a whole amount', function (): void {
+        expect(Money::roundUpMinor(1010, 'KES'))->toBe(Money::of(1010, 'KES')->roundUpToStep()->minor);
+    });
+
+    it('leaves a figure already on a step where it is', function (): void {
+        expect(Money::roundUpMinor(1500, 'KES'))->toBe(1500);
+    });
+});

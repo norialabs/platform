@@ -101,6 +101,21 @@ final class Money
         return new self(intdiv(self::checkedMultiply($this->minor, $basisPoints), 10_000), $this->currency);
     }
 
+    /**
+     * Up to the next whole step, from a quantity that has not been made an
+     * amount yet.
+     *
+     * A tariff slab is units times a rate, and units are fractional - a
+     * meter reads 12.4. Making that an integer first truncates before the
+     * rounding that was the point, so the float is carried all the way in.
+     */
+    public static function roundUpMinor(int|float $minor, ?string $currency = null): int
+    {
+        $step = self::stepFor(strtoupper($currency ?? self::defaultCurrency()));
+
+        return (int) (ceil((float) number_format($minor / $step, 6, '.', '')) * $step);
+    }
+
     /** Up to the next whole step the currency can actually show. */
     public function roundUpToStep(?int $step = null): self
     {
