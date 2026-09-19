@@ -12,6 +12,7 @@ use NoriaLabs\Platform\Rbac\PermissionResolver;
 use NoriaLabs\Platform\Rbac\Permissions;
 use NoriaLabs\Platform\Tests\Fixtures\Action;
 use NoriaLabs\Platform\Tests\Fixtures\Resource;
+use NoriaLabs\Platform\Tests\Fixtures\SidedResource;
 use NoriaLabs\Platform\Tests\Fixtures\StubCeiling;
 use NoriaLabs\Platform\Tests\Fixtures\StubPrincipal;
 use NoriaLabs\Platform\Tests\Fixtures\StubPrincipals;
@@ -241,5 +242,37 @@ describe('the token vocabulary', function (): void {
 
         expect($ability)->toBe('invoice:view');
         expect(TokenAbilities::isValid($ability))->toBeTrue();
+    });
+});
+
+describe('a catalogue with more than one side', function (): void {
+    beforeEach(fn () => config(['noria.rbac.resources' => SidedResource::class]));
+
+    /*
+     * A settings screen that lists every resource offers a tenant admin
+     * the platform ledger. Scope is what stops that.
+     */
+    it('offers only the resources belonging to that side', function (): void {
+        expect(array_map(fn ($r) => $r->value, Catalog::forScope('tenant')))
+            ->toBe(['invoice', 'report']);
+        expect(array_map(fn ($r) => $r->value, Catalog::forScope('platform')))
+            ->toBe(['ledger']);
+    });
+
+    it('renders a settings catalogue for one side only', function (): void {
+        $catalog = Permissions::fromArray(['invoice' => ['view']])->catalog('tenant');
+
+        expect(array_column($catalog, 'resource'))->toBe(['invoice', 'report']);
+    });
+
+    it('renders every side when the caller names none', function (): void {
+        expect(Permissions::none()->catalog())->toHaveCount(3);
+    });
+
+    /* A product with one side has nothing to filter. */
+    it('returns everything when the resources say nothing about scope', function (): void {
+        config(['noria.rbac.resources' => Resource::class]);
+
+        expect(Catalog::forScope('tenant'))->toBe(Resource::cases());
     });
 });

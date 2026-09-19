@@ -88,4 +88,34 @@ describe('security headers', function (): void {
     it('holds transport security back until the request is actually secure', function (): void {
         expect(respond()->headers->get('Strict-Transport-Security'))->toBeNull();
     });
+
+    /*
+     * An API answers with data, so it needs no origin at all - not even
+     * its own. A policy wide enough for the pages is far wider than the
+     * routes that only ever return JSON.
+     */
+    it('gives an api route a policy naming no origin at all', function (): void {
+        $response = (new SecurityHeaders)->handle(Request::create('/api/plans'), fn () => new Response);
+
+        expect($response->headers->get('Content-Security-Policy'))
+            ->toBe("default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+    });
+
+    it('leaves a page route on the wider policy', function (): void {
+        expect(respond()->headers->get('Content-Security-Policy'))->toContain("default-src 'self'");
+    });
+
+    it('matches the api paths the product named, not a hardcoded one', function (): void {
+        config(['noria.http.security_headers.api.paths' => ['webhooks/*']]);
+
+        $api = (new SecurityHeaders)->handle(Request::create('/webhooks/mpesa'), fn () => new Response);
+        $page = (new SecurityHeaders)->handle(Request::create('/api/plans'), fn () => new Response);
+
+        expect($api->headers->get('Content-Security-Policy'))->toContain("default-src 'none'");
+        expect($page->headers->get('Content-Security-Policy'))->toContain("default-src 'self'");
+    });
+
+    it('names no dev origin once the assets are built', function (): void {
+        expect(respond()->headers->get('Content-Security-Policy'))->not->toContain('localhost:5173');
+    });
 });

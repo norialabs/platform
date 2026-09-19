@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NoriaLabs\Platform\Csv;
 
 use Generator;
+use Illuminate\Support\Facades\Config;
 use RuntimeException;
 
 /**
@@ -32,6 +33,12 @@ final class Reader
     private const BOM = "\xEF\xBB\xBF";
 
     /**
+     * A ceiling on an uploaded file. An import that arrives in a request
+     * body has to be bounded before it is decoded, not after.
+     */
+    public const MAX_BYTES = 5_242_880;
+
+    /**
      * @param  list<string>  $headers
      * @param  list<array<string, string>>  $sample
      */
@@ -41,11 +48,89 @@ final class Reader
         public readonly string $delimiter,
     ) {}
 
+    /**
+     * The same file already in memory, as an upload arrives.
+     *
+     * A product that reads a CSV out of a request body has nothing to give
+     * a path-based reader but a temporary file it then has to clean up.
+     */
+    public static function previewContent(string $csv): self
+    {
+        return self::previewStream(self::memory($csv));
+    }
+
+    /**
+     * @return Generator<int, array<string, string>>
+     */
+    public static function rowsContent(string $csv): Generator
+    {
+        yield from self::rowsIn(self::memory($csv));
+    }
+
+    /** Data rows, not counting the header. */
+    public static function countContent(string $csv): int
+    {
+        $count = 0;
+
+        foreach (self::rowsContent($csv) as $ignored) {
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * An upload arrives base64 encoded as often as it arrives as a file,
+     * and is bounded before it is decoded: a caller that decodes first has
+     * already allocated whatever was sent.
+     */
+    public static function decode(string $data): string
+    {
+        $encodedCeiling = (int) ceil(self::maxBytes() * 4 / 3) + 1_024;
+
+        if (strlen($data) > $encodedCeiling) {
+            throw new RuntimeException('That file is not readable, or is too large.');
+        }
+
+        $decoded = base64_decode($data, true);
+
+        if ($decoded === false || strlen($decoded) > self::maxBytes()) {
+            throw new RuntimeException('That file is not readable, or is too large.');
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Rules for the two shapes an upload arrives in.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function uploadRules(string $file = 'csv', string $encoded = 'data_base64'): array
+    {
+        $bytes = self::maxBytes();
+
+        return [
+            $encoded => ['required_without:'.$file, 'string', 'max:'.((int) ceil($bytes * 4 / 3))],
+            $file => ['required_without:'.$encoded, 'string', 'max:'.$bytes],
+        ];
+    }
+
+    public static function maxBytes(): int
+    {
+        return Config::integer('noria.csv.max_bytes', self::MAX_BYTES);
+    }
+
     /** The headers and a few rows, which is all a mapping needs to be decided. */
     public static function preview(string $path): self
     {
-        $handle = self::open($path);
-        $delimiter = self::sniff($path);
+        return self::previewStream(self::open($path));
+    }
+
+    /** @param resource $handle */
+    private static function previewStream($handle): self
+    {
+        $delimiter = self::sniffStream($handle);
 
         $headers = self::headersFrom($handle, $delimiter);
         $sample = [];
@@ -72,8 +157,16 @@ final class Reader
      */
     public static function rows(string $path): Generator
     {
-        $handle = self::open($path);
-        $delimiter = self::sniff($path);
+        yield from self::rowsIn(self::open($path));
+    }
+
+    /**
+     * @param  resource  $handle
+     * @return Generator<int, array<string, string>>
+     */
+    private static function rowsIn($handle): Generator
+    {
+        $delimiter = self::sniffStream($handle);
         $headers = self::headersFrom($handle, $delimiter);
 
         // One-based and counting the header, because that is what the spreadsheet shows.
@@ -102,8 +195,25 @@ final class Reader
     public static function sniff(string $path): string
     {
         $handle = self::open($path);
+
+        try {
+            return self::sniffStream($handle);
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * Read from the handle and rewound, so the caller reads the header
+     * itself rather than losing it to the sniff.
+     *
+     * @param  resource  $handle
+     */
+    private static function sniffStream($handle): string
+    {
+        $at = ftell($handle);
         $first = fgets($handle, self::MAX_LINE_BYTES);
-        fclose($handle);
+        fseek($handle, $at === false ? 0 : $at);
 
         if ($first === false) {
             return ',';
@@ -203,6 +313,23 @@ final class Reader
     private static function stripBom(string $value): string
     {
         return str_starts_with($value, self::BOM) ? substr($value, strlen(self::BOM)) : $value;
+    }
+
+    /**
+     * @return resource
+     */
+    private static function memory(string $csv)
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        if ($handle === false) {
+            throw new RuntimeException('That file could not be read.');
+        }
+
+        fwrite($handle, $csv);
+        rewind($handle);
+
+        return $handle;
     }
 
     /** @return resource */

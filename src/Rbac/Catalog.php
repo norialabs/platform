@@ -8,6 +8,7 @@ use BackedEnum;
 use Illuminate\Support\Facades\Config;
 use NoriaLabs\Platform\Contracts\PermissionAction;
 use NoriaLabs\Platform\Contracts\PermissionResource;
+use NoriaLabs\Platform\Contracts\ScopedPermissionResource;
 use RuntimeException;
 
 /**
@@ -44,6 +45,27 @@ final class Catalog
         }
 
         return $cases;
+    }
+
+    /**
+     * The resources belonging to one side of the product.
+     *
+     * A catalogue whose resources say nothing about scope returns all of
+     * them: a product with one side has nothing to filter.
+     *
+     * @return list<PermissionResource>
+     */
+    public static function forScope(string $scope): array
+    {
+        $scoped = [];
+
+        foreach (self::resources() as $resource) {
+            if (! $resource instanceof ScopedPermissionResource || $resource->scope() === $scope) {
+                $scoped[] = $resource;
+            }
+        }
+
+        return $scoped;
     }
 
     public static function resource(string $value): ?PermissionResource

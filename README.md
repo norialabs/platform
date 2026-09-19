@@ -21,7 +21,7 @@ php artisan migrate
 Add to the root `composer.json` while developing:
 
 ```json
-{ "repositories": [{ "type": "path", "url": "../packages/laravel/norialabs-platform" }] }
+{ "repositories": [{ "type": "path", "url": "../packages/laravel/platform" }] }
 ```
 
 ## Modules
@@ -80,6 +80,10 @@ enum Action: string implements PermissionAction { /* value, label() */ }
 Gate::authorize(PlatformServiceProvider::GATE, [Resource::Invoice, Action::Delete]);
 ```
 
+A product with more than one side implements `ScopedPermissionResource` instead, and
+`Catalog::forScope()` and `$permissions->catalog($scope)` narrow to it. Without that, a settings
+screen listing every resource offers a tenant admin the platform ledger.
+
 `Permissions` is a value object, not an array: the document was written by a request body or by an
 older version of the class, and both are untrusted on the way in. It refuses a resource the product
 does not have, a verb it does not have, and a verb the resource does not admit.
@@ -102,7 +106,7 @@ Masked rather than dropped: a support ticket saying the token ended `9f` is answ
 `[redacted]` is not.
 
 This is the front of the pipe, not the transport. It scrubs and hands off to whatever channel the
-product configured, so it composes with `thekiharani/laravel-cwl` rather than replacing it:
+product configured, so it composes with `norialabs/cloudwatch` rather than replacing it:
 
 ```
 Logger::auth('otp issued', ['phone' => '254712345678'])   scrubbed here
@@ -294,6 +298,11 @@ in: already in minor units, or as a string somebody typed.
 `Reader` handles the file somebody actually has - a BOM from Excel, semicolons from an older
 export, padded and duplicated headers - and yields rows numbered the way the spreadsheet shows.
 `Writer` streams, and defuses a cell a spreadsheet would run as a formula.
+
+An upload arrives in a request body rather than as a path, so `previewContent`, `rowsContent` and
+`countContent` read the same file already in memory. `decode` bounds a base64 payload **before**
+decoding it - a caller that decodes first has already allocated whatever was sent - and
+`uploadRules` bounds both shapes it arrives in.
 
 ## Customising
 
