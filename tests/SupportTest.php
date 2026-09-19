@@ -128,6 +128,43 @@ describe('showing an amount', function (): void {
     it('shows a unit price with both decimals', function (): void {
         expect(Money::of(275, 'KES')->formatUnitPrice())->toContain('2.75');
     });
+
+    it('shows the local symbol, not the ISO code', function (): void {
+        expect(Money::of(123_450, 'KES')->format())->toContain('Ksh');
+        expect(Money::of(123_450, 'TZS')->format())->toContain('TSh');
+        expect(Money::of(123_450, 'UGX')->format())->toContain('USh');
+    });
+
+    /*
+     * The bug this guards: ICU renders KES as "KES" under en and "Ksh"
+     * under en_KE, so reading the locale from configuration means a deploy
+     * that sets app.locale silently rewrites every amount in the product.
+     */
+    it('renders the same amount whatever the application locale is', function (): void {
+        $amount = Money::of(123_450, 'KES');
+
+        config(['app.locale' => 'en']);
+        $under_en = $amount->format();
+
+        config(['app.locale' => 'de_DE']);
+
+        expect($amount->format())->toBe($under_en)->toContain('Ksh');
+    });
+
+    it('takes the locale a currency names, and lets config override it', function (): void {
+        expect(Money::localeFor('KES'))->toBe('en_KE');
+        expect(Money::localeFor('ZAR'))->toBe('en_ZA');
+
+        // The euro is the currency whose code does not name a country.
+        expect(Money::localeFor('EUR'))->toBe('en_IE');
+
+        config(['noria.money.locales.KES' => 'sw_KE']);
+        expect(Money::localeFor('KES'))->toBe('sw_KE');
+    });
+
+    it('still honours a locale passed in', function (): void {
+        expect(Money::of(123_450, 'KES')->format('en'))->toContain('KES');
+    });
 });
 
 describe('validating an amount', function (): void {

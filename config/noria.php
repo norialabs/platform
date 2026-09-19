@@ -200,6 +200,20 @@ return [
         ],
 
         'max_minor' => (int) env('NORIA_MONEY_MAX_MINOR', 1_000_000_000_000),
+
+        /*
+         * The locale each currency renders in. Pinned per currency rather
+         * than taken from app.locale, because otherwise the same amount
+         * prints "KES 1,234.50" on one deployment and "Ksh 1,234.50" on the
+         * next, and nothing in the code says which.
+         *
+         * The default is en_<country> read off the currency code, which is
+         * right wherever the code names its country. The euro is the one
+         * that does not, so it is listed.
+         */
+        'locales' => [
+            'EUR' => 'en_IE',
+        ],
     ],
 
     'db' => [

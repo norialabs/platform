@@ -138,12 +138,30 @@ final class Money
         return $this->minor / self::SCALE;
     }
 
-    /** For a person to read: the currency symbol and its own number of decimals. */
+    /** For a person to read: the local symbol and the currency's own decimals. */
     public function format(?string $locale = null, ?int $precision = null): string
     {
         $digits = $precision ?? self::fractionDigits($this->currency);
+        $locale ??= self::localeFor($this->currency);
 
         return self::withPlainSpaces((string) Number::currency($this->toMajor(), $this->currency, $locale, $digits));
+    }
+
+    /**
+     * The locale a currency is rendered in.
+     *
+     * Pinned per currency, never taken from app.locale: ICU renders KES as
+     * "KES" under en and "Ksh" under en_KE, so leaving it to configuration
+     * means a locale change silently rewrites every amount in the product.
+     */
+    public static function localeFor(?string $currency = null): string
+    {
+        $currency = strtoupper($currency ?? self::defaultCurrency());
+        $mapped = Config::array('noria.money.locales', [])[$currency] ?? null;
+
+        return is_string($mapped) && $mapped !== ''
+            ? $mapped
+            : 'en_'.substr($currency, 0, 2);
     }
 
     /**
