@@ -9,6 +9,8 @@ use NoriaLabs\Platform\Auth\OtpOutcome;
 use NoriaLabs\Platform\Auth\OtpThrottled;
 use NoriaLabs\Platform\Auth\ProviderProfile;
 use NoriaLabs\Platform\Auth\SocialState;
+use NoriaLabs\Platform\Platform;
+use NoriaLabs\Platform\Tests\Fixtures\HostOtpChallenge;
 
 it('issues a code of the configured length', function (): void {
     config(['platform.auth.otp.length' => 8]);
@@ -235,4 +237,20 @@ describe('a round trip through a provider', function (): void {
 
         expect($profile->raw)->toBe(['locale' => 'en']);
     });
+});
+
+describe('substituting the model', function (): void {
+    it('issues and verifies through the model the host substituted', function (): void {
+        Platform::useOtpChallengeModel(HostOtpChallenge::class);
+
+        $otp = app(Otp::class);
+        $code = $otp->issue('ada@example.com');
+
+        expect(HostOtpChallenge::query()->sole())->toBeInstanceOf(HostOtpChallenge::class);
+        expect($otp->verify('ada@example.com', $code))->toBe(OtpOutcome::Verified);
+    });
+
+    it('refuses a substitute that is not a sign-in code', function (): void {
+        Platform::useOtpChallengeModel(stdClass::class);
+    })->throws(InvalidArgumentException::class);
 });

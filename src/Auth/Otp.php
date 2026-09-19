@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use NoriaLabs\Platform\Platform;
 
 /**
  * Issuing and checking a one-time code, and nothing else: no user lookup, no
@@ -34,7 +35,7 @@ class Otp
             return null;
         }
 
-        $last = OtpChallenge::query()
+        $last = Platform::otpChallengeModel()::query()
             ->where('identifier', $this->normalise($identifier))
             ->latest('created_at')
             ->first();
@@ -71,7 +72,7 @@ class Otp
 
         $this->pending($identifier)->delete();
 
-        OtpChallenge::query()->create([
+        Platform::otpChallengeModel()::query()->create([
             'identifier' => $this->normalise($identifier),
             'code_hash' => Hash::make($code),
             'attempts' => 0,
@@ -113,7 +114,7 @@ class Otp
     /** Rows nobody will use again. Consumed ones are kept for the trail until they age out. */
     public function prune(int $days = 7): int
     {
-        $deleted = OtpChallenge::query()
+        $deleted = Platform::otpChallengeModel()::query()
             ->where('expires_at', '<', Carbon::now()->subDays($days))
             ->delete();
 
@@ -123,7 +124,7 @@ class Otp
     /** @return Builder<OtpChallenge> */
     private function pending(string $identifier)
     {
-        return OtpChallenge::query()
+        return Platform::otpChallengeModel()::query()
             ->where('identifier', $this->normalise($identifier))
             ->whereNull('consumed_at');
     }

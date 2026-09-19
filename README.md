@@ -151,7 +151,7 @@ export, padded and duplicated headers - and yields rows numbered the way the spr
 |---|---|
 | Database | `platform.connection` |
 | Table names | `platform.table_prefix`, or `platform.tables.<name>` for one |
-| Models | `Platform::useAuditLogModel(...)` |
+| Models | `Platform::useAuditLogModel(...)`, `useOtpChallengeModel(...)` |
 | Tenant column and settings | `platform.tenancy.column`, `.workspace_guc`, `.gucs` |
 | Tables outside tenancy | `platform.tenancy.unscoped_tables` |
 | RBAC catalogue | `platform.rbac.resources`, `.actions` |

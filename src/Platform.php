@@ -7,6 +7,7 @@ namespace NoriaLabs\Platform;
 use Illuminate\Support\Facades\Config;
 use InvalidArgumentException;
 use NoriaLabs\Platform\Audit\AuditLog;
+use NoriaLabs\Platform\Auth\OtpChallenge;
 
 /**
  * The package's configuration surface: which models it reads through, what
@@ -21,6 +22,9 @@ final class Platform
     /** @var class-string<AuditLog> */
     private static string $auditLogModel = AuditLog::class;
 
+    /** @var class-string<OtpChallenge> */
+    private static string $otpChallengeModel = OtpChallenge::class;
+
     public static function useAuditLogModel(string $model): void
     {
         if (! is_a($model, AuditLog::class, allow_string: true)) {
@@ -30,10 +34,25 @@ final class Platform
         self::$auditLogModel = $model;
     }
 
+    public static function useOtpChallengeModel(string $model): void
+    {
+        if (! is_a($model, OtpChallenge::class, allow_string: true)) {
+            throw new InvalidArgumentException($model.' must extend '.OtpChallenge::class.'.');
+        }
+
+        self::$otpChallengeModel = $model;
+    }
+
     /** @return class-string<AuditLog> */
     public static function auditLogModel(): string
     {
         return self::$auditLogModel;
+    }
+
+    /** @return class-string<OtpChallenge> */
+    public static function otpChallengeModel(): string
+    {
+        return self::$otpChallengeModel;
     }
 
     /**
@@ -63,5 +82,6 @@ final class Platform
     public static function forgetModels(): void
     {
         self::$auditLogModel = AuditLog::class;
+        self::$otpChallengeModel = OtpChallenge::class;
     }
 }
