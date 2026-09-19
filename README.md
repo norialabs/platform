@@ -290,7 +290,7 @@ The dump and restore tests need a second role as well, one that may bypass row l
 and they skip without it rather than passing against a file that would have come back empty:
 
 ```bash
-psql postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls in role platform_test"
+psql postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls createdb in role platform_test"
 
 NORIA_TEST_PG_ADMIN="pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test" vendor/bin/pest
 ```

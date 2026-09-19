@@ -77,7 +77,7 @@ jobs:
           set -euo pipefail
           psql -h 127.0.0.1 -U postgres -c "create role platform_test login password 'platform_test' nosuperuser nobypassrls"
           psql -h 127.0.0.1 -U postgres -c "create database platform_test owner platform_test"
-          psql -h 127.0.0.1 -U postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls in role platform_test"
+          psql -h 127.0.0.1 -U postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls createdb in role platform_test"
           psql -h 127.0.0.1 -U postgres -d platform_test -c "grant all on schema public to platform_test"
 
       - name: Run tests against Postgres
