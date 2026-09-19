@@ -1,7 +1,11 @@
 # norialabs/platform
 
-The chassis every Noria Laravel product sits on. Internal - not published, and pinned hard to
-PHP 8.5 and Laravel 13 because we control every consumer.
+[![CI](https://github.com/norialabs/platform/actions/workflows/ci.yml/badge.svg)](https://github.com/norialabs/platform/actions/workflows/ci.yml)
+[![Packagist](https://img.shields.io/packagist/v/norialabs/platform)](https://packagist.org/packages/norialabs/platform)
+
+The chassis every Noria Laravel product sits on. Built for our own products and pinned hard to
+PHP 8.5 and Laravel 13 because we control every consumer - but public, and MIT, so nothing here
+is a secret you have to take on trust.
 
 Extracted from zana and the CRM, which had been solving the same eight problems twice. Where the
 two had diverged, the better implementation won and the other one's extras were folded in.

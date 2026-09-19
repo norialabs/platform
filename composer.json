@@ -1,6 +1,6 @@
 {
   "name": "norialabs/platform",
-  "description": "The chassis every Noria Laravel product sits on: workspace tenancy with row level security, RBAC, an audit trail, passwordless auth, database operations, and the shared primitives. Internal.",
+  "description": "The chassis every Noria Laravel product sits on: workspace tenancy with row level security, RBAC, an audit trail, passwordless auth, database operations, and the shared primitives.",
   "license": "MIT",
   "type": "library",
   "authors": [
