@@ -234,11 +234,54 @@ believe forwarded headers at all.
 or a 504 means the application is not answering, so the page for it cannot be rendered by the
 application and its stylesheet cannot be fetched either - both are baked in ahead of time.
 
+### Timestamps
+
+`noria.timestamps` is `tz` by default, so the package's columns are `timestamptz`.
+
+That needs the connection to agree with the application. Eloquent writes a naive
+`Y-m-d H:i:s`, and Postgres reads it into a `timestamptz` using the **session** timezone - so a
+server sitting on `Africa/Nairobi` under an application on UTC stores every moment three hours
+early. Nothing errors; a sign-in code is simply born expired, and it only reproduces on the one
+machine whose server has that default.
+
+```php
+// config/database.php
+'timezone' => env('DB_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+```
+
+The migration refuses without it, and `noria:tenancy-check` reports it afterwards, because a
+connection added later would otherwise go unnoticed until the next migration. Set
+`noria.timestamps` to `plain` for a host whose other tables are not timezone aware.
+
 ### Money
 
 Integers throughout: a float cannot hold a third of a shilling and a sum of floats does not
-reconcile. Mixing currencies throws. `checkedMultiply` refuses an overflow before it happens,
-because an int product past `PHP_INT_MAX` silently becomes a float and returns a wrong amount.
+reconcile. Mixing currencies throws.
+
+**Minor is always hundredths of the major unit**, whatever the currency displays. The shilling
+shows no decimals and is still stored in hundredths, because a tariff of 2.75 per unit has to
+survive being multiplied by a meter reading before anything rounds it for a document. Tying
+storage to the displayed precision is what rounds that 2.75 to 3 and bills the wrong number.
+
+Fraction digits are therefore a display decision, per currency in `noria.money.fraction_digits`,
+falling back to `noria.money.digits` and capped at two. Each formatter says which it wants:
+
+```php
+$price->format();            // KES 3 - the symbol, at the currency's own precision
+$price->document();          // 3     - bare, for a column that has its own alignment
+$price->rate();              // 2.75  - bare, always two decimals
+$price->formatUnitPrice();   // KES 2.75 - a unit price always shows both
+```
+
+`fromMajor` takes a **string** and parses it rather than casting through a float, because
+`(float) 'twelve'` is a silent zero and a silent zero is an invoice nobody queries until month
+end. A third decimal rounds the second rather than being dropped. `times()` accepts a fractional
+quantity, since a meter reading or a part hour is one.
+
+`checkedMultiply` takes the product as a float and rounds once at the end, then refuses anything
+outside `noria.money.max_minor` - so an amount that ran away is rejected rather than returned
+wrong. `rules()` and `majorRules()` are the validation rules for the two shapes an amount arrives
+in: already in minor units, or as a string somebody typed.
 
 ### Csv
 
