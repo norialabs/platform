@@ -46,7 +46,7 @@ class Invitations
         $invitation = Platform::invitationModel()::query()->create([
             Config::string('noria.tenancy.column', 'workspace_id') => $workspaceId,
             'destination_hash' => $this->hash->of($to->value),
-            'destination_hint' => $to->masked(),
+            'destination_hint' => $to->hint(Config::string('noria.invitations.hint', 'masked')),
             'channel' => $channel->value,
             'role' => $role,
             'token_hash' => $this->hash->of($token),

@@ -38,6 +38,16 @@ final class Destination implements Stringable
         return $this->isEmail === $channel->needsEmail();
     }
 
+    /**
+     * What a person should see beside the hash. `masked` is the safe default;
+     * `plain` is for a list whose reader supplied the address in the first
+     * place, such as a workspace admin reviewing who they invited.
+     */
+    public function hint(string $style): string
+    {
+        return $style === 'plain' ? $this->value : $this->masked();
+    }
+
     public function masked(): string
     {
         if (! $this->isEmail) {

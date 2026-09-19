@@ -60,6 +60,17 @@ describe('inviting somebody', function (): void {
         expect(StubCourier::$sent[0]['context']['workspace'])->toBe('Acme');
     });
 
+    it('shows the address back when the product asked to see it', function (): void {
+        config(['noria.invitations.hint' => 'plain']);
+
+        app(Invitations::class)->invite(ada(), 'member');
+
+        $invitation = Invitation::query()->sole();
+
+        expect($invitation->destination_hint)->toBe('ada@example.com')
+            ->and($invitation->destination_hash)->not->toContain('ada@example.com');
+    });
+
     it('reaches somebody on whatsapp as readily as by mail', function (): void {
         $phone = Destination::tryFrom('0712345678');
 
