@@ -21,7 +21,7 @@ php artisan migrate
 Add to the root `composer.json` while developing:
 
 ```json
-{ "repositories": [{ "type": "path", "url": "../packages/laravel/norialabs-platform" }] }
+{ "repositories": [{ "type": "path", "url": "../packages/laravel/platform" }] }
 ```
 
 ## Modules
