@@ -97,6 +97,22 @@ them, and never loses the defaults.
 Masked rather than dropped: a support ticket saying the token ended `9f` is answerable, one saying
 `[redacted]` is not.
 
+This is the front of the pipe, not the transport. It scrubs and hands off to whatever channel the
+product configured, so it composes with `thekiharani/laravel-cwl` rather than replacing it:
+
+```
+Logger::auth('otp issued', ['phone' => '254712345678'])   scrubbed here
+        v
+Log::channel('auth')                                      Laravel
+        v
+'auth' => ['driver' => 'cloudwatch', ...]                 laravel-cwl ships it
+```
+
+Do not write a CloudWatch channel of your own - `laravel-cwl` is that, and this package
+deliberately carries no handler, no driver and no AWS SDK, because every product would then pull
+it to get a redacted log line. A channel this package names that the product has not defined falls
+back to the default one, so `auth` and `backup` are optional.
+
 ### Audit
 
 Append-only, outside tenancy, and the trail outlives the workspace it describes. One
