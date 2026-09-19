@@ -82,7 +82,9 @@ Gate::authorize(PlatformServiceProvider::GATE, [Resource::Invoice, Action::Delet
 
 A product with more than one side implements `ScopedPermissionResource` instead, and
 `Catalog::forScope()` and `$permissions->catalog($scope)` narrow to it. Without that, a settings
-screen listing every resource offers a tenant admin the platform ledger.
+screen listing every resource offers a tenant admin the platform ledger. A side may be named by a
+plain string or by the product's own backed enum - `scope()` returns `string|BackedEnum`, so a
+product that already types its scopes keeps that type rather than stringifying at the boundary.
 
 `Permissions` is a value object, not an array: the document was written by a request body or by an
 older version of the class, and both are untrusted on the way in. It refuses a resource the product
@@ -174,9 +176,11 @@ a product may not use Sanctum at all. Sanctum is a suggested dependency, not a r
 
 ### Invitations
 
-One open invitation per destination, a hashed single-use token, a deadline, and the answer that
-the person accepting is the person invited - a leaked link must not become an account in somebody
-else's workspace.
+One open invitation per destination per workspace, a hashed single-use token, a deadline, and the
+answer that the person accepting is the person invited - a leaked link must not become an account
+in somebody else's workspace. `invite()` takes the workspace it is for and falls back to the one
+in hand, so an operator can invite into a workspace they are not currently inside without
+withdrawing the invitation another workspace is still waiting on.
 
 What a role means and who becomes a member stay with the product: `accept()` marks the invitation
 used inside its workspace and hands it back for the caller to write the membership from. Delivery

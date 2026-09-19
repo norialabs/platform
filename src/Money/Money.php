@@ -20,12 +20,12 @@ final class Money
 
     public static function of(int $minor, ?string $currency = null): self
     {
-        return new self($minor, strtoupper($currency ?? self::defaultCurrency()));
+        return new self($minor, strtoupper($currency ?? self::currency()));
     }
 
     public static function zero(?string $currency = null): self
     {
-        return new self(0, strtoupper($currency ?? self::defaultCurrency()));
+        return new self(0, strtoupper($currency ?? self::currency()));
     }
 
     /**
@@ -55,7 +55,7 @@ final class Money
             $minor = -$minor;
         }
 
-        return new self(self::assertWithinBounds($minor), strtoupper($currency ?? self::defaultCurrency()));
+        return new self(self::assertWithinBounds($minor), strtoupper($currency ?? self::currency()));
     }
 
     public function plus(self $other): self
@@ -84,7 +84,7 @@ final class Money
 
     public static function roundUpMinor(int|float $minor, ?string $currency = null): int
     {
-        $step = self::stepFor(strtoupper($currency ?? self::defaultCurrency()));
+        $step = self::stepFor(strtoupper($currency ?? self::currency()));
 
         return (int) (ceil((float) number_format($minor / $step, 6, '.', '')) * $step);
     }
@@ -133,9 +133,14 @@ final class Money
         return self::withPlainSpaces((string) Number::currency($this->toMajor(), $this->currency, $locale, $digits));
     }
 
+    public static function currency(): string
+    {
+        return Config::string('noria.money.currency', 'KES');
+    }
+
     public static function localeFor(?string $currency = null): string
     {
-        $currency = strtoupper($currency ?? self::defaultCurrency());
+        $currency = strtoupper($currency ?? self::currency());
         $mapped = Config::array('noria.money.locales', [])[$currency] ?? null;
 
         return is_string($mapped) && $mapped !== ''
@@ -160,7 +165,7 @@ final class Money
 
     public static function fractionDigits(?string $currency = null): int
     {
-        $currency = strtoupper($currency ?? self::defaultCurrency());
+        $currency = strtoupper($currency ?? self::currency());
         $table = Config::array('noria.money.fraction_digits', []);
         $digits = $table[$currency] ?? Config::integer('noria.money.digits', 2);
 
@@ -184,7 +189,7 @@ final class Money
      */
     public static function majorRules(?string $currency = null, ?int $minMinor = 1): array
     {
-        $currency = strtoupper($currency ?? self::defaultCurrency());
+        $currency = strtoupper($currency ?? self::currency());
 
         return [
             'bail',
@@ -261,10 +266,5 @@ final class Money
         if ($this->currency !== $other->currency) {
             throw new InvalidArgumentException("Cannot combine {$this->currency} with {$other->currency}.");
         }
-    }
-
-    private static function defaultCurrency(): string
-    {
-        return Config::string('noria.money.currency', 'KES');
     }
 }

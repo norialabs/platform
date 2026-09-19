@@ -44,17 +44,26 @@ final class Catalog
     /**
      * @return list<PermissionResource>
      */
-    public static function forScope(string $scope): array
+    public static function forScope(string|BackedEnum $scope): array
     {
+        $wanted = self::scopeKey($scope);
         $scoped = [];
 
         foreach (self::resources() as $resource) {
-            if (! $resource instanceof ScopedPermissionResource || $resource->scope() === $scope) {
+            if (! $resource instanceof ScopedPermissionResource || self::scopeKey($resource->scope()) === $wanted) {
                 $scoped[] = $resource;
             }
         }
 
         return $scoped;
+    }
+
+    /**
+     * A scope may be named by a plain string or by a host's own backed enum.
+     */
+    public static function scopeKey(string|BackedEnum $scope): string
+    {
+        return $scope instanceof BackedEnum ? (string) $scope->value : $scope;
     }
 
     public static function resource(string $value): ?PermissionResource

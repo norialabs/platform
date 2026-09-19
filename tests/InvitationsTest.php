@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use NoriaLabs\Platform\Contracts\Courier;
 use NoriaLabs\Platform\Identity\Channel;
 use NoriaLabs\Platform\Identity\Destination;
@@ -84,6 +85,27 @@ describe('inviting somebody', function (): void {
         $invitations->invite(grace(), 'member');
 
         expect(Invitation::query()->count())->toBe(2);
+    });
+
+    it('leaves the invitation one workspace is waiting on when another invites the same person', function (): void {
+        $invitations = app(Invitations::class);
+        $acme = (string) Str::uuid();
+        $globex = (string) Str::uuid();
+
+        ['token' => $first] = $invitations->invite(ada(), 'member', workspaceId: $acme);
+        ['token' => $second] = $invitations->invite(ada(), 'admin', workspaceId: $globex);
+
+        expect(Invitation::query()->count())->toBe(2)
+            ->and($invitations->find($first)->workspace_id)->toBe($acme)
+            ->and($invitations->find($second)->workspace_id)->toBe($globex);
+    });
+
+    it('records the workspace it was named for rather than the one in hand', function (): void {
+        $elsewhere = (string) Str::uuid();
+
+        app(Invitations::class)->invite(ada(), 'member', workspaceId: $elsewhere);
+
+        expect(Invitation::query()->sole()->workspace_id)->toBe($elsewhere);
     });
 });
 

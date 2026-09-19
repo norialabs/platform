@@ -25,6 +25,7 @@ class Invitations
 
     /**
      * @param  array<string, mixed>  $context  anything the courier needs to write the message
+     * @param  string|null  $workspaceId  the workspace invited into, defaulting to the current one
      * @return array{invitation: Invitation, token: string} the token exists only in this return value
      */
     public function invite(
@@ -33,12 +34,17 @@ class Invitations
         Channel $channel = Channel::Email,
         ?string $invitedBy = null,
         array $context = [],
+        ?string $workspaceId = null,
     ): array {
         $token = Str::random(64);
+        $workspaceId ??= $this->tenancy->id();
 
-        $this->open($to)->delete();
+        // Scoped, or re-inviting someone to a second workspace would withdraw
+        // the invitation the first one is still waiting on.
+        $this->open($to, $workspaceId)->delete();
 
         $invitation = Platform::invitationModel()::query()->create([
+            Config::string('noria.tenancy.column', 'workspace_id') => $workspaceId,
             'destination_hash' => $this->hash->of($to->value),
             'destination_hint' => $to->masked(),
             'channel' => $channel->value,
@@ -56,13 +62,17 @@ class Invitations
     /**
      * @return Builder<Invitation>
      */
-    public function open(Destination $to): Builder
+    public function open(Destination $to, ?string $workspaceId = null): Builder
     {
         /** @var Builder<Invitation> $query */
         $query = Platform::invitationModel()::query();
 
         return $query
             ->where('destination_hash', $this->hash->of($to->value))
+            ->when(
+                $workspaceId !== null,
+                fn (Builder $open): Builder => $open->where(Config::string('noria.tenancy.column', 'workspace_id'), $workspaceId),
+            )
             ->whereNull('accepted_at')
             ->whereNull('revoked_at');
     }

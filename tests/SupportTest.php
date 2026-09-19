@@ -411,17 +411,17 @@ describe('an uploaded csv', function (): void {
 
     it('refuses an encoded payload too large to be worth decoding', function (): void {
         Reader::decode(str_repeat('A', (int) ceil(Reader::maxBytes() * 4 / 3) + 2_048));
-    })->throws(RuntimeException::class, 'too large');
+    })->throws(InvalidArgumentException::class, 'too large');
 
     it('refuses content that decodes to more than the ceiling', function (): void {
         config(['noria.csv.max_bytes' => 16]);
 
         Reader::decode(base64_encode(str_repeat('a', 64)));
-    })->throws(RuntimeException::class, 'too large');
+    })->throws(InvalidArgumentException::class, 'too large');
 
     it('refuses something that is not base64 at all', function (): void {
         Reader::decode('not base64 !!!');
-    })->throws(RuntimeException::class);
+    })->throws(InvalidArgumentException::class);
 
     it('bounds both shapes an upload arrives in', function (): void {
         $rules = Reader::uploadRules();

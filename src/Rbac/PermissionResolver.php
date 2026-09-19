@@ -35,10 +35,11 @@ class PermissionResolver
             return Permissions::none();
         }
 
-        $key = $principal->scope().'|'.($principal->contextId() ?? '').'|'.implode(',', $principal->roleSlugs());
+        $scope = Catalog::scopeKey($principal->scope());
+        $key = $scope.'|'.($principal->contextId() ?? '').'|'.implode(',', $principal->roleSlugs());
 
         return $this->resolved[$key] ??= $this->roles
-            ->permissionsFor($principal->scope(), $principal->roleSlugs())
+            ->permissionsFor($scope, $principal->roleSlugs())
             ->withinCeiling($this->ceiling?->for($user));
     }
 
