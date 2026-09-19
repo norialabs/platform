@@ -176,7 +176,30 @@ return [
 
     'money' => [
         'currency' => env('NORIA_CURRENCY', 'KES'),
-        'minor_units' => (int) env('NORIA_CURRENCY_MINOR_UNITS', 2),
+
+        /*
+         * Amounts are stored in hundredths of the major unit whatever the
+         * currency displays, so a tariff of 2.75 per unit survives being
+         * multiplied by a reading before anything rounds it.
+         *
+         * These are display digits, capped at two. A currency absent from
+         * the table falls back to 'digits'.
+         */
+        'digits' => (int) env('NORIA_MONEY_DIGITS', 2),
+
+        'fraction_digits' => [
+            'KES' => 0,
+            'TZS' => 0,
+            'UGX' => 0,
+            'RWF' => 0,
+            'NGN' => 0,
+            'USD' => 2,
+            'EUR' => 2,
+            'GBP' => 2,
+            'ZAR' => 2,
+        ],
+
+        'max_minor' => (int) env('NORIA_MONEY_MAX_MINOR', 1_000_000_000_000),
     ],
 
     'db' => [

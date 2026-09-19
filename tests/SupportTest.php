@@ -28,40 +28,138 @@ describe('money', function (): void {
         Money::of(1_000, 'KES')->plus(Money::of(1_000, 'USD'));
     })->throws(InvalidArgumentException::class);
 
-    it('reads what a person typed into minor units', function (): void {
-        expect(Money::fromMajor('12.34', 'KES')->minor)->toBe(1_234);
+    /*
+     * Minor is hundredths whatever the currency shows, so a tariff of 2.75
+     * per unit survives being multiplied by a reading before anything
+     * rounds it for a document.
+     */
+    it('stores hundredths even for a currency that displays none', function (): void {
+        expect(Money::fromMajor('1234', 'KES')->minor)->toBe(123_400);
+        expect(Money::fromMajor('12.34', 'USD')->minor)->toBe(1_234);
+    });
+
+    it('rounds a third decimal into the second rather than dropping it', function (): void {
+        expect(Money::fromMajor('1.005', 'USD')->minor)->toBe(101);
+        expect(Money::fromMajor('1.004', 'USD')->minor)->toBe(100);
+    });
+
+    /* A silent zero from a mistyped amount is an invoice nobody queries. */
+    it('refuses what is not a plain decimal', function (string $raw): void {
+        Money::fromMajor($raw, 'KES');
+    })->with(['', 'abc', '1,000', '1.2.3', '1e5', ' '])->throws(InvalidArgumentException::class);
+
+    it('keeps a negative amount negative', function (): void {
+        expect(Money::fromMajor('-12.34', 'USD')->minor)->toBe(-1_234);
     });
 
     it('takes a fee quoted in hundredths of a percent', function (): void {
         expect(Money::of(100_000, 'KES')->shareOfBasisPoints(250)->minor)->toBe(2_500);
     });
 
-    it('rounds up to the next whole step for a minimum charge', function (): void {
-        expect(Money::of(1_010, 'KES')->roundUpToStep(500)->minor)->toBe(1_500);
+    /* A meter reading or a part hour is not a whole number of units. */
+    it('multiplies by a fractional quantity and rounds once at the end', function (): void {
+        expect(Money::of(275, 'KES')->times(3.5)->minor)->toBe(963);
     });
 
-    /*
-     * An int past PHP_INT_MAX silently becomes a float, so a multiplication
-     * that overflows returns a wrong amount rather than failing.
-     */
-    it('refuses a multiplication that would overflow instead of returning a float', function (): void {
-        Money::of(1_000_000_000_000, 'KES')->times(PHP_INT_MAX);
-    })->throws(RuntimeException::class);
+    it('refuses a multiplication that leaves the supported range', function (): void {
+        Money::of(1_000_000_000, 'KES')->times(1_000_000);
+    })->throws(InvalidArgumentException::class);
 
     it('refuses an amount outside the range it can hold', function (): void {
-        Money::of(Money::MAX_MINOR + 1, 'KES');
-    })->throws(RuntimeException::class);
+        Money::assertWithinBounds(Money::maxMinor() + 1);
+    })->throws(InvalidArgumentException::class);
 
-    it('takes the currency from config when the caller names none', function (): void {
-        config(['noria.money.currency' => 'UGX']);
+    it('takes the range from config', function (): void {
+        config(['noria.money.max_minor' => 5_000]);
 
-        expect(Money::zero()->currency)->toBe('UGX');
+        expect(Money::maxMinor())->toBe(5_000);
+        expect(fn () => Money::assertWithinBounds(5_001))->toThrow(InvalidArgumentException::class);
+    });
+});
+
+describe('showing an amount', function (): void {
+    /*
+     * Fraction digits are a display decision. The shilling shows none and
+     * is still stored in hundredths.
+     */
+    it('shows a currency at its own number of decimals', function (): void {
+        expect(Money::of(123_400, 'KES')->document())->toBe('1234');
+        expect(Money::of(1_234, 'USD')->document())->toBe('12.34');
     });
 
-    it('reads minor units from config, for a currency that has none', function (): void {
-        config(['noria.money.minor_units' => 0]);
+    it('rounds to the decimals the currency shows', function (): void {
+        expect(Money::of(123_450, 'KES')->document())->toBe('1235');
+        expect(Money::of(123_449, 'KES')->document())->toBe('1234');
+    });
 
-        expect(Money::fromMajor(1_500)->minor)->toBe(1_500);
+    /* A tariff of 2.75 rendered as 3 is not the price. */
+    it('shows a rate at two decimals whatever the currency does', function (): void {
+        expect(Money::of(275, 'KES')->rate())->toBe('2.75');
+        expect(Money::of(275, 'KES')->document())->toBe('3');
+    });
+
+    it('never writes a negative zero onto a document', function (): void {
+        expect(Money::of(-40, 'KES')->document())->toBe('0');
+    });
+
+    it('takes the digits for a currency from config', function (): void {
+        config(['noria.money.fraction_digits.KES' => 2]);
+
+        expect(Money::of(123_400, 'KES')->document())->toBe('1234.00');
+    });
+
+    it('falls back to the default digits for a currency nobody listed', function (): void {
+        config(['noria.money.digits' => 2]);
+
+        expect(Money::fractionDigits('XOF'))->toBe(2);
+    });
+
+    it('never shows more than two decimals, because nothing stores them', function (): void {
+        config(['noria.money.fraction_digits.KES' => 6]);
+
+        expect(Money::fractionDigits('KES'))->toBe(2);
+    });
+
+    /* Number::currency uses non-breaking spaces, which no CSV survives. */
+    it('formats with ordinary spaces', function (): void {
+        expect(Money::of(123_400, 'KES')->format())->not->toContain("\u{00A0}");
+    });
+
+    it('shows a unit price with both decimals', function (): void {
+        expect(Money::of(275, 'KES')->formatUnitPrice())->toContain('2.75');
+    });
+});
+
+describe('validating an amount', function (): void {
+    it('bounds an amount already in minor units', function (): void {
+        expect(Money::rules())->toBe(['integer', 'min:1', 'max:'.Money::maxMinor()]);
+        expect(Money::rules(positive: false))->toBe(['integer', 'min:-'.Money::maxMinor(), 'max:'.Money::maxMinor()]);
+    });
+
+    it('accepts what a person could plausibly type', function (): void {
+        expect(validator(['amount' => '12.50'], ['amount' => Money::majorRules('USD')])->passes())->toBeTrue();
+    });
+
+    it('refuses what they could not', function (string $raw): void {
+        expect(validator(['amount' => $raw], ['amount' => Money::majorRules('USD')])->passes())->toBeFalse();
+    })->with(['nonsense', '1,000', '1.2.3', '12abc']);
+
+    /*
+     * Laravel skips a closure rule on an empty value, so an optional
+     * amount left blank passes. A field that must be filled says
+     * 'required' itself, as it would for any other rule.
+     */
+    it('leaves an empty optional amount to the caller required rule', function (): void {
+        expect(validator(['amount' => ''], ['amount' => Money::majorRules('USD')])->passes())->toBeTrue();
+        expect(validator(['amount' => ''], ['amount' => ['required', ...Money::majorRules('USD')]])->passes())->toBeFalse();
+    });
+
+    it('refuses an amount under the floor the caller set', function (): void {
+        expect(validator(['amount' => '0'], ['amount' => Money::majorRules('USD', minMinor: 100)])->passes())->toBeFalse();
+    });
+
+    it('accepts any amount when the caller set no floor', function (): void {
+        expect(validator(['amount' => '0'], ['amount' => Money::majorRules('USD', minMinor: null)])->passes())->toBeTrue();
     });
 });
 
