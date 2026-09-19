@@ -11,7 +11,9 @@ use NoriaLabs\Platform\Platform;
 
 /**
  * @property string $id
- * @property string $identifier
+ * @property string $destination_hash
+ * @property string|null $destination_hint
+ * @property string $channel
  * @property string $code_hash
  * @property int $attempts
  * @property Carbon|null $created_at

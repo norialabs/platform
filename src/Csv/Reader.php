@@ -6,6 +6,7 @@ namespace NoriaLabs\Platform\Csv;
 
 use Generator;
 use Illuminate\Support\Facades\Config;
+use InvalidArgumentException;
 use RuntimeException;
 
 final class Reader
@@ -59,13 +60,13 @@ final class Reader
         $encodedCeiling = (int) ceil(self::maxBytes() * 4 / 3) + 1_024;
 
         if (strlen($data) > $encodedCeiling) {
-            throw new RuntimeException('That file is not readable, or is too large.');
+            throw new InvalidArgumentException('That file is not readable, or is too large.');
         }
 
         $decoded = base64_decode($data, true);
 
         if ($decoded === false || strlen($decoded) > self::maxBytes()) {
-            throw new RuntimeException('That file is not readable, or is too large.');
+            throw new InvalidArgumentException('That file is not readable, or is too large.');
         }
 
         return $decoded;

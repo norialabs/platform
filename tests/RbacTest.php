@@ -12,6 +12,8 @@ use NoriaLabs\Platform\Rbac\PermissionResolver;
 use NoriaLabs\Platform\Rbac\Permissions;
 use NoriaLabs\Platform\Tests\Fixtures\Action;
 use NoriaLabs\Platform\Tests\Fixtures\Resource;
+use NoriaLabs\Platform\Tests\Fixtures\Scope;
+use NoriaLabs\Platform\Tests\Fixtures\ScopedByEnum;
 use NoriaLabs\Platform\Tests\Fixtures\SidedResource;
 use NoriaLabs\Platform\Tests\Fixtures\StubCeiling;
 use NoriaLabs\Platform\Tests\Fixtures\StubPrincipal;
@@ -24,6 +26,7 @@ beforeEach(function (): void {
     StubPrincipals::$calls = 0;
     StubRoles::$grants = [];
     StubRoles::$calls = 0;
+    StubRoles::$scope = null;
     StubCeiling::$ceiling = null;
 });
 
@@ -254,5 +257,32 @@ describe('a catalogue with more than one side', function (): void {
         config(['noria.rbac.resources' => Resource::class]);
 
         expect(Catalog::forScope('tenant'))->toBe(Resource::cases());
+    });
+});
+
+describe('a product that names its sides with an enum', function (): void {
+    beforeEach(fn () => config(['noria.rbac.resources' => ScopedByEnum::class]));
+
+    it('sorts the resources by side when the resource answers with an enum', function (): void {
+        expect(array_map(fn ($r) => $r->value, Catalog::forScope('tenant')))
+            ->toBe(['invoice', 'report']);
+        expect(array_map(fn ($r) => $r->value, Catalog::forScope(Scope::Platform)))
+            ->toBe(['ledger']);
+    });
+
+    it('renders a settings catalogue for a side named by an enum', function (): void {
+        $catalog = Permissions::fromArray(['invoice' => ['view']])->catalog(Scope::Tenant);
+
+        expect(array_column($catalog, 'resource'))->toBe(['invoice', 'report']);
+    });
+
+    it('reads a role for a principal whose side is an enum', function (): void {
+        StubPrincipals::$principal = new StubPrincipal(Scope::Tenant, ['clerk']);
+        StubRoles::$grants = ['clerk' => ['invoice' => ['view']]];
+
+        $resolver = new PermissionResolver(new StubPrincipals, new StubRoles);
+
+        expect($resolver->permissionsFor(new User)->has(ScopedByEnum::Invoice, Action::View))->toBeTrue()
+            ->and(StubRoles::$scope)->toBe('tenant');
     });
 });

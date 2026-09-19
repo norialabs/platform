@@ -14,9 +14,12 @@ class StubRoles implements RoleRepository
 
     public static int $calls = 0;
 
+    public static ?string $scope = null;
+
     public function permissionsFor(string $scope, array $slugs): Permissions
     {
         self::$calls++;
+        self::$scope = $scope;
 
         $permissions = Permissions::none();
 

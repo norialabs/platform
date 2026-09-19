@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NoriaLabs\Platform\Rbac;
 
+use BackedEnum;
 use Illuminate\Contracts\Support\Arrayable;
 use InvalidArgumentException;
 use JsonSerializable;
@@ -121,7 +122,7 @@ final class Permissions implements Arrayable, JsonSerializable
     /**
      * @return list<array{resource: string, label: string, actions: list<array{action: string, label: string, granted: bool}>}>
      */
-    public function catalog(?string $scope = null): array
+    public function catalog(string|BackedEnum|null $scope = null): array
     {
         $resources = $scope === null ? Catalog::resources() : Catalog::forScope($scope);
 
