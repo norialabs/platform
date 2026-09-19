@@ -80,6 +80,10 @@ enum Action: string implements PermissionAction { /* value, label() */ }
 Gate::authorize(PlatformServiceProvider::GATE, [Resource::Invoice, Action::Delete]);
 ```
 
+A product with more than one side implements `ScopedPermissionResource` instead, and
+`Catalog::forScope()` and `$permissions->catalog($scope)` narrow to it. Without that, a settings
+screen listing every resource offers a tenant admin the platform ledger.
+
 `Permissions` is a value object, not an array: the document was written by a request body or by an
 older version of the class, and both are untrusted on the way in. It refuses a resource the product
 does not have, a verb it does not have, and a verb the resource does not admit.
@@ -294,6 +298,11 @@ in: already in minor units, or as a string somebody typed.
 `Reader` handles the file somebody actually has - a BOM from Excel, semicolons from an older
 export, padded and duplicated headers - and yields rows numbered the way the spreadsheet shows.
 `Writer` streams, and defuses a cell a spreadsheet would run as a formula.
+
+An upload arrives in a request body rather than as a path, so `previewContent`, `rowsContent` and
+`countContent` read the same file already in memory. `decode` bounds a base64 payload **before**
+decoding it - a caller that decodes first has already allocated whatever was sent - and
+`uploadRules` bounds both shapes it arrives in.
 
 ## Customising
 

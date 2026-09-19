@@ -136,13 +136,17 @@ final class Permissions implements Arrayable, JsonSerializable
     }
 
     /**
-     * The catalogue a settings screen renders, derived from the enums so it
-     * cannot drift from the values the gates actually check.
+     * The catalogue a settings screen renders, derived from the enums so
+     * it cannot drift from the values the gates actually check. Narrowed
+     * to one scope where the product has more than one side: a tenant
+     * role must never be offered a platform resource.
      *
      * @return list<array{resource: string, label: string, actions: list<array{action: string, label: string, granted: bool}>}>
      */
-    public function catalog(): array
+    public function catalog(?string $scope = null): array
     {
+        $resources = $scope === null ? Catalog::resources() : Catalog::forScope($scope);
+
         return array_map(fn (PermissionResource $resource): array => [
             'resource' => self::key($resource),
             'label' => $resource->label(),
@@ -151,7 +155,7 @@ final class Permissions implements Arrayable, JsonSerializable
                 'label' => $action->label(),
                 'granted' => $this->has($resource, $action),
             ], $resource->actions()),
-        ], Catalog::resources());
+        ], $resources);
     }
 
     /** @return array<string, list<string>> */

@@ -417,3 +417,67 @@ describe('rounding a quantity up to a step', function (): void {
         expect(Money::roundUpMinor(1500, 'KES'))->toBe(1500);
     });
 });
+
+describe('reading a csv already in memory', function (): void {
+    /*
+     * A product reading an import out of a request body has nothing to
+     * give a path-based reader but a temp file it then has to clean up.
+     */
+    it('reads content the same way it reads a file', function (): void {
+        $csv = "name,email\nAda,ada@example.com\n";
+
+        expect(Reader::previewContent($csv)->headers)->toBe(['name', 'email']);
+        expect(iterator_to_array(Reader::rowsContent($csv)))
+            ->toBe([2 => ['name' => 'Ada', 'email' => 'ada@example.com']]);
+    });
+
+    it('sniffs a delimiter out of content without eating the header', function (): void {
+        expect(Reader::previewContent("name;email\nAda;a@b.com\n")->delimiter)->toBe(';');
+        expect(Reader::previewContent("name;email\nAda;a@b.com\n")->headers)->toBe(['name', 'email']);
+    });
+
+    it('counts the data rows, not the header', function (): void {
+        expect(Reader::countContent("name\nAda\nGrace\n"))->toBe(2);
+        expect(Reader::countContent("name\n"))->toBe(0);
+    });
+
+    it('reads past a byte order mark in content too', function (): void {
+        expect(Reader::previewContent("\xEF\xBB\xBFname\nAda\n")->headers)->toBe(['name']);
+    });
+});
+
+describe('an uploaded csv', function (): void {
+    it('decodes what arrived base64 encoded', function (): void {
+        expect(Reader::decode(base64_encode("name\nAda\n")))->toBe("name\nAda\n");
+    });
+
+    /* Bounded before it is decoded: decoding first has already allocated it. */
+    it('refuses an encoded payload too large to be worth decoding', function (): void {
+        Reader::decode(str_repeat('A', (int) ceil(Reader::maxBytes() * 4 / 3) + 2_048));
+    })->throws(RuntimeException::class, 'too large');
+
+    it('refuses content that decodes to more than the ceiling', function (): void {
+        config(['noria.csv.max_bytes' => 16]);
+
+        Reader::decode(base64_encode(str_repeat('a', 64)));
+    })->throws(RuntimeException::class, 'too large');
+
+    it('refuses something that is not base64 at all', function (): void {
+        Reader::decode('not base64 !!!');
+    })->throws(RuntimeException::class);
+
+    it('bounds both shapes an upload arrives in', function (): void {
+        $rules = Reader::uploadRules();
+
+        expect($rules)->toHaveKeys(['csv', 'data_base64']);
+        expect($rules['csv'])->toContain('required_without:data_base64');
+        expect($rules['data_base64'])->toContain('required_without:csv');
+    });
+
+    it('takes the ceiling from config', function (): void {
+        config(['noria.csv.max_bytes' => 1_024]);
+
+        expect(Reader::maxBytes())->toBe(1_024);
+        expect(Reader::uploadRules()['csv'])->toContain('max:1024');
+    });
+});

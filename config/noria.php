@@ -207,6 +207,15 @@ return [
         'stylesheet' => env('NORIA_ERROR_STYLESHEET', 'resources/css/app.css'),
     ],
 
+    'csv' => [
+        /*
+         * A ceiling on an upload. An import arriving in a request body has
+         * to be bounded before it is decoded, not after: a caller that
+         * decodes first has already allocated whatever was sent.
+         */
+        'max_bytes' => (int) env('NORIA_CSV_MAX_BYTES', 5_242_880),
+    ],
+
     'money' => [
         'currency' => env('NORIA_CURRENCY', 'KES'),
 
