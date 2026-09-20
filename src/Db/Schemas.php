@@ -43,6 +43,35 @@ final class Schemas
         }
     }
 
+    /** @return list<array{signature: string, keyword: string}> */
+    public static function routines(Connection $connection): array
+    {
+        $namespace = self::filter('n.nspname', $connection);
+
+        $rows = $connection->select(
+            'select p.oid::regprocedure::text as signature, p.prokind as kind '
+            .'from pg_proc p join pg_namespace n on n.oid = p.pronamespace '
+            .'where '.$namespace['sql']
+            ."  and p.prokind in ('f', 'p') "
+            ."  and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') "
+            .'order by 1',
+            $namespace['bindings'],
+        );
+
+        $routines = [];
+
+        foreach ($rows as $row) {
+            if (is_object($row) && is_scalar($row->signature ?? null)) {
+                $routines[] = [
+                    'signature' => (string) $row->signature,
+                    'keyword' => ($row->kind ?? '') === 'p' ? 'procedure' : 'function',
+                ];
+            }
+        }
+
+        return $routines;
+    }
+
     /**
      * @param  list<string>  $ignore
      * @return array<string, array<string, ColumnShape>>

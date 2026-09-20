@@ -60,6 +60,18 @@ abstract class TestCase extends Orchestra
                     'timezone' => 'UTC',
                 ]);
             }
+
+            if (($superuser = env('NORIA_TEST_PG_SUPERUSER')) !== null) {
+                $app['config']->set('database.connections.noria_pg_superuser', [
+                    'driver' => 'pgsql',
+                    'url' => $superuser,
+                    'charset' => 'utf8',
+                    'prefix' => '',
+                    'search_path' => 'public',
+                    'sslmode' => 'prefer',
+                    'timezone' => 'UTC',
+                ]);
+            }
         } else {
             $app['config']->set('database.default', 'testing');
 

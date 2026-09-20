@@ -18,4 +18,13 @@ final class Identifier
 
         return $value;
     }
+
+    public static function quoted(string $value): string
+    {
+        if (preg_match('/^[A-Za-z0-9_-]+$/', $value) !== 1) {
+            throw new InvalidArgumentException("Unsafe identifier [{$value}].");
+        }
+
+        return '"'.$value.'"';
+    }
 }

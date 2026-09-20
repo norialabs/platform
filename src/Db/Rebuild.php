@@ -135,30 +135,11 @@ class Rebuild
      */
     public function dropOrphanedRoutines(Connection $connection, callable $report): array
     {
-        $namespace = Schemas::filter('n.nspname', $connection);
-
-        $routines = $connection->select(
-            'select p.oid::regprocedure::text as signature, p.prokind as kind '
-            .'from pg_proc p join pg_namespace n on n.oid = p.pronamespace '
-            .'where '.$namespace['sql']
-            ."  and p.prokind in ('f', 'p') "
-            ."  and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') "
-            .'order by 1',
-            $namespace['bindings'],
-        );
-
         $dropped = [];
 
-        foreach ($routines as $routine) {
-            if (! is_object($routine) || ! is_scalar($routine->signature ?? null)) {
-                continue;
-            }
-
-            $signature = (string) $routine->signature;
-            $keyword = ($routine->kind ?? '') === 'p' ? 'procedure' : 'function';
-
-            $connection->statement("drop {$keyword} if exists {$signature} cascade");
-            $dropped[] = $signature;
+        foreach (Schemas::routines($connection) as $routine) {
+            $connection->statement("drop {$routine['keyword']} if exists {$routine['signature']} cascade");
+            $dropped[] = $routine['signature'];
         }
 
         if ($dropped !== []) {

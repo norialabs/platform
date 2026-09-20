@@ -51,6 +51,10 @@ class RestoreCommand extends Command
         $this->components->twoColumnDetail('Key', $result['key']);
         $this->components->twoColumnDetail('Database', $result['database'].($result['created'] ? ' (created)' : ''));
         $this->components->twoColumnDetail('Dropped', (string) $result['dropped'].' tables');
+
+        if ($result['extensions'] !== []) {
+            $this->components->twoColumnDetail('Installed', implode(', ', $result['extensions']));
+        }
         $this->components->twoColumnDetail('Size', sprintf('%.1f MB', $result['bytes'] / 1_048_576));
 
         return self::SUCCESS;
