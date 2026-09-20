@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Db\Rebuild;
@@ -23,9 +24,98 @@ describe('refusing to start', function (): void {
         app(Rebuild::class)->run('copy_db', false, fn () => null);
     })->throws(RuntimeException::class, 'needs a pgsql connection');
 
-    it('refuses a role that cannot carry the reload through', function (): void {
-        app(Rebuild::class)->run('copy_db', false, fn () => null);
-    })->throws(RuntimeException::class, 'not a superuser');
+    it('refuses a role that cannot carry the reload through, naming every missing privilege', function (): void {
+        try {
+            app(Rebuild::class)->run('copy_db', false, fn () => null);
+        } catch (RuntimeException $refusal) {
+            expect($refusal->getMessage())
+                ->toContain('cannot carry the reload through')
+                ->toContain('BYPASSRLS')
+                ->toContain('CREATEDB')
+                ->toContain('pg_signal_backend');
+
+            return;
+        }
+
+        $this->fail('The rebuild started on a role that cannot finish it.');
+    });
+});
+
+describe('holding the references off for a reload', function (): void {
+    beforeEach(function (): void {
+        DB::statement('create table reload_parents (id int primary key, name text not null)');
+        DB::statement(<<<'SQL'
+            create table reload_children (
+                id int primary key,
+                parent_id int not null references reload_parents (id),
+                token text not null
+            )
+        SQL);
+        DB::statement(<<<'SQL'
+            create function reload_token() returns trigger language plpgsql as $$
+            begin
+                new.token := 'minted';
+                return new;
+            end $$
+        SQL);
+        DB::statement(
+            'create trigger reload_children_token before insert on reload_children '
+            .'for each row execute function reload_token()'
+        );
+    });
+
+    afterEach(function (): void {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        DB::statement('drop table if exists reload_children');
+        DB::statement('drop table if exists reload_parents');
+        DB::statement('drop function if exists reload_token()');
+    });
+
+    it('takes rows in any order and puts the stored ones back untouched', function (): void {
+        $put = app(Rebuild::class)->holdOffReferences(DB::connection(), function (): void {
+            DB::statement("insert into reload_children values (1, 7, 'as stored')");
+            DB::statement("insert into reload_parents values (7, 'late')");
+        });
+
+        expect($put)->toBe(1)
+            ->and(DB::scalar('select token from reload_children where id = 1'))->toBe('as stored');
+    });
+
+    it('puts the foreign key back validated, so the load cannot smuggle an orphan through', function (): void {
+        app(Rebuild::class)->holdOffReferences(DB::connection(), function (): void {
+            DB::statement("insert into reload_parents values (7, 'first')");
+            DB::statement("insert into reload_children values (1, 7, 'kept')");
+        });
+
+        $key = DB::selectOne(
+            "select convalidated from pg_constraint where conname = 'reload_children_parent_id_fkey'"
+        );
+
+        expect($key?->convalidated)->toBeTrue()
+            ->and(fn () => DB::transaction(
+                fn () => DB::statement("insert into reload_children values (2, 404, 'orphan')")
+            ))->toThrow(QueryException::class, 'reload_children_parent_id_fkey');
+    });
+
+    it('refuses a load that leaves an orphan behind', function (): void {
+        expect(fn () => DB::transaction(fn () => app(Rebuild::class)->holdOffReferences(
+            DB::connection(),
+            fn () => DB::statement("insert into reload_children values (1, 404, 'orphan')"),
+        )))->toThrow(QueryException::class, 'reload_children_parent_id_fkey');
+    });
+
+    it('lets the triggers fire again once the load is done', function (): void {
+        app(Rebuild::class)->holdOffReferences(DB::connection(), function (): void {
+            DB::statement("insert into reload_parents values (7, 'first')");
+        });
+
+        DB::statement("insert into reload_children values (1, 7, 'ignored')");
+
+        expect(DB::scalar('select token from reload_children where id = 1'))->toBe('minted');
+    });
 });
 
 describe('reading the shape', function (): void {

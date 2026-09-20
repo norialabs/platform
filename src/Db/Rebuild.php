@@ -28,7 +28,7 @@ class Rebuild
         $admin = $this->connectTo($maintenance, 'postgres');
 
         $this->assertPostgres($settings);
-        $this->assertSuperuser($admin, Connections::value($maintenance, 'username'));
+        $this->assertPrivileges($admin, Connections::value($maintenance, 'username'), $database);
         $this->assertToolsMatchServer($admin);
         $this->assertAbsent($admin, $copy);
 
@@ -39,7 +39,7 @@ class Rebuild
 
         $this->assertSoleSession($admin, $database, $report);
         $report("Copying {$database} to {$copy}.");
-        $this->createDatabase($admin, $copy, $database, Connections::value($settings, 'username'));
+        $this->createDatabase($admin, $copy, $database, Connections::value($maintenance, 'username'));
 
         $dump = null;
         $expected = [];
@@ -58,9 +58,14 @@ class Rebuild
             $this->dropOrphanedRoutines($this->connectTo($maintenance, $database), $report);
             Schemas::ensure($this->connectTo($maintenance, $database));
             $this->release($database);
-            $this->migrateFresh();
+            $this->migrateFresh($maintenance);
 
             $rebuilt = $this->connectTo($maintenance, $database);
+            $this->assertAppCanUse(
+                $rebuilt,
+                Connections::value($settings, 'username'),
+                Connections::value($maintenance, 'username'),
+            );
             $deferred = $this->unvalidatedChecks($rebuilt);
 
             if ($deferred !== []) {
@@ -69,10 +74,10 @@ class Rebuild
                     count($deferred),
                     implode(', ', array_column($deferred, 'name')),
                 ));
-                $this->dropChecks($rebuilt, $deferred);
+                $this->dropConstraints($rebuilt, $deferred);
             }
 
-            $this->restore($maintenance, $database, $dump, $report);
+            $this->restore($maintenance, $rebuilt, $database, $dump, $report);
             $this->verifyRowCounts($this->connectTo($maintenance, $database), $expected, $report);
             $this->bringUp($bringUp, $report);
             $this->addChecks($this->connectTo($maintenance, $database), $deferred);
@@ -173,16 +178,75 @@ class Rebuild
         }
     }
 
-    private function assertSuperuser(Connection $admin, string $role): void
+    private function assertPrivileges(Connection $admin, string $role, string $database): void
     {
-        $found = $admin->selectOne('select rolsuper from pg_roles where rolname = current_user');
+        $found = $admin->selectOne(
+            'select rolsuper or rolbypassrls as bypasses, rolsuper or rolcreatedb as creates, '
+            ."pg_has_role(current_user, 'pg_signal_backend', 'usage') as signals, "
+            .'(select pg_has_role(current_user, d.datdba, \'usage\') from pg_database d where d.datname = ?) as owns '
+            .'from pg_roles where rolname = current_user',
+            [$database],
+        );
 
-        if (! is_object($found) || ! ($found->rolsuper ?? false)) {
+        $missing = array_values(array_filter([
+            is_object($found) && ($found->bypasses ?? false) ? null
+                : "BYPASSRLS, or the dump comes back empty for every tenant table (alter role {$role} bypassrls)",
+            is_object($found) && ($found->creates ?? false) ? null
+                : "CREATEDB, or the safety copy cannot be taken (alter role {$role} createdb)",
+            is_object($found) && ($found->signals ?? false) ? null
+                : "membership of pg_signal_backend, or sessions left on {$database} cannot be cleared "
+                  ."(grant pg_signal_backend to {$role})",
+            is_object($found) && ($found->owns ?? false) ? null
+                : "ownership of {$database}, or it cannot be copied or renamed (alter database {$database} owner to {$role})",
+        ]));
+
+        if ($missing !== []) {
             throw new RuntimeException(
-                "The rebuild role [{$role}] is not a superuser, so the dump would come back empty and the "
-                .'reload could not disable referential triggers. Point noria.db.admin_connection at a superuser.'
+                "The rebuild role [{$role}] cannot carry the reload through. It needs:\n  - ".implode("\n  - ", $missing)
             );
         }
+    }
+
+    private function assertAppCanUse(Connection $rebuilt, string $app, string $owner): void
+    {
+        if ($app === '' || $app === $owner) {
+            return;
+        }
+
+        $namespace = Schemas::filter('n.nspname', $rebuilt);
+
+        $rows = $rebuilt->select(
+            'select c.oid::regclass::text as name from pg_class c join pg_namespace n on n.oid = c.relnamespace '
+            ."where c.relkind in ('r', 'S') and ".$namespace['sql'].' and not case c.relkind '
+            ."when 'r' then has_table_privilege(?, c.oid, 'select') and has_table_privilege(?, c.oid, 'insert') "
+            ."and has_table_privilege(?, c.oid, 'update') and has_table_privilege(?, c.oid, 'delete') "
+            ."else has_sequence_privilege(?, c.oid, 'usage') and has_sequence_privilege(?, c.oid, 'select') end "
+            .'order by 1',
+            [...$namespace['bindings'], $app, $app, $app, $app, $app, $app],
+        );
+
+        $blind = [];
+
+        foreach ($rows as $row) {
+            if (is_object($row)) {
+                $blind[] = self::text($row->name ?? null);
+            }
+        }
+
+        if ($blind === []) {
+            return;
+        }
+
+        throw new RuntimeException(sprintf(
+            'The rebuilt schema belongs to [%s], and the app role [%s] cannot use %d of its objects, including %s. '
+            .'Grant the default privileges for [%s] to [%s] on the cluster, then rebuild.',
+            $owner,
+            $app,
+            count($blind),
+            implode(', ', array_slice($blind, 0, 3)),
+            $owner,
+            $app,
+        ));
     }
 
     private function assertToolsMatchServer(Connection $admin): void
@@ -252,12 +316,12 @@ class Rebuild
         $probe = $database.'_rebuild_probe';
 
         $this->dropDatabase($admin, $probe);
-        $this->createDatabase($admin, $probe, null, Connections::value($settings, 'username'));
+        $this->createDatabase($admin, $probe, null, Connections::value($maintenance, 'username'));
 
         $default = Config::string('database.default');
 
         try {
-            Config::set('database.connections.noria-rebuild-probe', [...$settings, 'database' => $probe]);
+            Config::set('database.connections.noria-rebuild-probe', [...$maintenance, 'database' => $probe]);
             DB::purge('noria-rebuild-probe');
 
             if (Artisan::call('migrate', ['--database' => 'noria-rebuild-probe', '--force' => true]) !== 0) {
@@ -389,23 +453,57 @@ class Rebuild
         return $path;
     }
 
+    /**
+     * Loads rows in whatever order they arrive by holding the foreign keys and user triggers off,
+     * then putting them back, which validates every reference the load has just made.
+     *
+     * @param  callable(): void  $load
+     * @return int the number of foreign keys put back
+     */
+    public function holdOffReferences(Connection $rebuilt, callable $load): int
+    {
+        $keys = $this->foreignKeys($rebuilt);
+
+        $this->dropConstraints($rebuilt, $keys);
+        $this->setUserTriggers($rebuilt, enabled: false);
+
+        $load();
+
+        $this->setUserTriggers($rebuilt, enabled: true);
+        $this->addForeignKeys($rebuilt, $keys);
+
+        return count($keys);
+    }
+
     /** @return list<array{table: string, name: string, definition: string}> */
     private function unvalidatedChecks(Connection $connection): array
+    {
+        return $this->constraints($connection, "c.contype = 'c' and not c.convalidated");
+    }
+
+    /** @return list<array{table: string, name: string, definition: string}> */
+    private function foreignKeys(Connection $connection): array
+    {
+        return $this->constraints($connection, "c.contype = 'f'");
+    }
+
+    /** @return list<array{table: string, name: string, definition: string}> */
+    private function constraints(Connection $connection, string $held): array
     {
         $namespace = Schemas::filter('n.nspname', $connection);
 
         $rows = $connection->select(
             'select conrelid::regclass::text as tbl, conname as name, pg_get_constraintdef(c.oid) as definition '
             .'from pg_constraint c join pg_namespace n on n.oid = c.connamespace '
-            ."where c.contype = 'c' and not c.convalidated and ".$namespace['sql'].' order by conname',
+            .'where '.$held.' and '.$namespace['sql'].' order by conname',
             $namespace['bindings'],
         );
 
-        $checks = [];
+        $constraints = [];
 
         foreach ($rows as $row) {
             if (is_object($row)) {
-                $checks[] = [
+                $constraints[] = [
                     'table' => self::text($row->tbl ?? null),
                     'name' => self::text($row->name ?? null),
                     'definition' => self::text($row->definition ?? null),
@@ -413,14 +511,41 @@ class Rebuild
             }
         }
 
-        return $checks;
+        return $constraints;
     }
 
-    /** @param list<array{table: string, name: string, definition: string}> $checks */
-    private function dropChecks(Connection $connection, array $checks): void
+    /** @param list<array{table: string, name: string, definition: string}> $constraints */
+    private function dropConstraints(Connection $connection, array $constraints): void
     {
-        foreach ($checks as $check) {
-            $connection->statement('alter table '.$check['table'].' drop constraint "'.$check['name'].'"');
+        foreach ($constraints as $constraint) {
+            $connection->statement('alter table '.$constraint['table'].' drop constraint "'.$constraint['name'].'"');
+        }
+    }
+
+    /** @param list<array{table: string, name: string, definition: string}> $keys */
+    private function addForeignKeys(Connection $connection, array $keys): void
+    {
+        foreach ($keys as $key) {
+            $connection->statement('alter table '.$key['table'].' add constraint "'.$key['name'].'" '.$key['definition']);
+        }
+    }
+
+    private function setUserTriggers(Connection $connection, bool $enabled): void
+    {
+        $namespace = Schemas::filter('n.nspname', $connection);
+
+        $rows = $connection->select(
+            'select c.oid::regclass::text as tbl from pg_class c join pg_namespace n on n.oid = c.relnamespace '
+            ."where c.relkind = 'r' and c.relhastriggers and ".$namespace['sql'].' order by 1',
+            $namespace['bindings'],
+        );
+
+        foreach ($rows as $row) {
+            if (is_object($row)) {
+                $connection->statement(
+                    'alter table '.self::text($row->tbl ?? null).' '.($enabled ? 'enable' : 'disable').' trigger user'
+                );
+            }
         }
     }
 
@@ -436,12 +561,20 @@ class Rebuild
         }
     }
 
-    private function migrateFresh(): void
+    /** @param array<string, mixed> $maintenance */
+    private function migrateFresh(array $maintenance): void
     {
         DB::purge();
 
-        if (Artisan::call('migrate:fresh', ['--force' => true]) !== 0) {
-            throw new RuntimeException('migrate:fresh failed: '.trim(Artisan::output()));
+        Config::set('database.connections.noria-rebuild-fresh', $maintenance);
+        DB::purge('noria-rebuild-fresh');
+
+        try {
+            if (Artisan::call('migrate:fresh', ['--database' => 'noria-rebuild-fresh', '--force' => true]) !== 0) {
+                throw new RuntimeException('migrate:fresh failed: '.trim(Artisan::output()));
+            }
+        } finally {
+            DB::purge('noria-rebuild-fresh');
         }
     }
 
@@ -449,20 +582,19 @@ class Rebuild
      * @param  array<string, mixed>  $maintenance
      * @param  callable(string): void  $report
      */
-    private function restore(array $maintenance, string $database, string $dump, callable $report): void
+    private function restore(array $maintenance, Connection $rebuilt, string $database, string $dump, callable $report): void
     {
-        $this->execute($maintenance, [
+        $keys = $this->holdOffReferences($rebuilt, fn () => $this->execute($maintenance, [
             'pg_restore',
             ...$this->target($maintenance, $database),
             '--data-only',
-            '--disable-triggers',
             '--single-transaction',
             '--no-owner',
             '--no-privileges',
             $dump,
-        ], 'pg_restore');
+        ], 'pg_restore'));
 
-        $report('Reloaded the data.');
+        $report(sprintf('Reloaded the data and validated %d foreign key(s) against it.', $keys));
     }
 
     /**
