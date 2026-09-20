@@ -287,11 +287,15 @@ describe('a real dump and restore', function (): void {
         committed()->statement('drop table if exists widgets');
         committed()->statement('create table widgets (id int primary key, name text)');
         committed()->table('widgets')->insert([['id' => 1, 'name' => 'ours'], ['id' => 2, 'name' => 'theirs']]);
+        committed()->unprepared(
+            'create or replace function widget_guard() returns trigger as $$ begin return new; end; $$ language plpgsql'
+        );
     });
 
     afterEach(function (): void {
         if (env('NORIA_TEST_PG_ADMIN') !== null) {
             committed()->statement('drop table if exists widgets');
+            committed()->statement('drop function if exists widget_guard() cascade');
         }
     });
 
@@ -314,6 +318,28 @@ describe('a real dump and restore', function (): void {
         try {
             expect($beside->table('widgets')->pluck('name')->sort()->values()->all())
                 ->toBe(['ours', 'theirs']);
+        } finally {
+            $beside->disconnect();
+            dropRestoreTarget();
+        }
+    });
+
+    it('clears the functions a dump will recreate, so a second restore is not a collision', function (): void {
+        $result = app(Backup::class)->run('backups');
+
+        app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
+        $again = app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
+
+        expect($again['created'])->toBeFalse();
+
+        $beside = Connections::open('assert', [
+            ...Connections::asAdmin(Connections::settings()),
+            'database' => 'platform_test_restore',
+        ]);
+
+        try {
+            expect($beside->scalar("select count(*) from pg_proc where proname = 'widget_guard'"))->toBe(1)
+                ->and($beside->table('widgets')->count())->toBe(2);
         } finally {
             $beside->disconnect();
             dropRestoreTarget();

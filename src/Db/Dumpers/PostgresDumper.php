@@ -12,6 +12,7 @@ use NoriaLabs\Platform\Contracts\DatabaseDumper;
 use NoriaLabs\Platform\Contracts\DatabaseMaintainer;
 use NoriaLabs\Platform\Db\Connections;
 use NoriaLabs\Platform\Db\Identifier;
+use NoriaLabs\Platform\Db\Schemas;
 use RuntimeException;
 use Throwable;
 
@@ -205,6 +206,10 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
             $builder->dropAllViews();
             $builder->dropAllTables();
             $builder->dropAllTypes();
+
+            foreach (Schemas::routines($admin) as $routine) {
+                $admin->statement("drop {$routine['keyword']} if exists {$routine['signature']} cascade");
+            }
 
             return is_numeric($before) ? (int) $before : 0;
         } finally {
