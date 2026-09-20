@@ -164,6 +164,8 @@ return [
 
         'admin_connection' => env('NORIA_DB_ADMIN_CONNECTION'),
 
+        'superuser_connection' => env('NORIA_DB_SUPERUSER_CONNECTION'),
+
         'rebuild' => [
             'unrestored' => ['migrations'],
 

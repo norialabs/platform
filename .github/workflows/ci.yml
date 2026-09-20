@@ -79,6 +79,7 @@ jobs:
         env:
           NORIA_TEST_PG: pgsql://platform_test:platform_test@127.0.0.1:5432/platform_test
           NORIA_TEST_PG_ADMIN: pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test
+          NORIA_TEST_PG_SUPERUSER: pgsql://postgres:postgres@127.0.0.1:5432/platform_test
         run: ./vendor/bin/pest
 
       - name: Run tests on SQLite

@@ -25,4 +25,11 @@ interface DatabaseMaintainer
      * @return int how many tables were there before
      */
     public function dropExisting(array $connection): int;
+
+    /**
+     * @param  array<string, mixed>  $connection  pointed at the database being loaded
+     * @param  string  $source  the plain dump about to be read
+     * @return list<string> what had to be installed, empty where the target already had them
+     */
+    public function ensureExtensions(array $connection, string $source): array;
 }

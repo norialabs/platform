@@ -16,7 +16,7 @@ class Restore
         private Backup $backups,
     ) {}
 
-    /** @return array{key: string, disk: string, database: string, created: bool, bytes: int, dropped: int} */
+    /** @return array{key: string, disk: string, database: string, created: bool, bytes: int, dropped: int, extensions: list<string>} */
     public function run(
         ?string $key = null,
         ?string $disk = null,
@@ -60,6 +60,7 @@ class Restore
             $bytes = $this->download($disk, $key, $archive);
             $source = $this->expand($archive, $plain);
 
+            $extensions = $dumper instanceof DatabaseMaintainer ? $dumper->ensureExtensions($settings, $source) : [];
             $dropped = $dumper instanceof DatabaseMaintainer ? $dumper->dropExisting($settings) : 0;
 
             $dumper->restore($settings, $source);
@@ -71,6 +72,7 @@ class Restore
                 'created' => $created,
                 'bytes' => $bytes,
                 'dropped' => $dropped,
+                'extensions' => $extensions,
             ];
         } finally {
             foreach ([$archive, $plain] as $file) {

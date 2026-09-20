@@ -19,6 +19,33 @@ use NoriaLabs\Platform\Db\Restore;
 use NoriaLabs\Platform\Db\Schemas;
 use NoriaLabs\Platform\Db\Timestamps;
 
+function asSuperuser(Closure $work): void
+{
+    $server = Connections::open('superuser-fixture', Connections::settings('noria_pg_superuser'));
+
+    try {
+        $work($server);
+    } finally {
+        $server->disconnect();
+    }
+}
+
+function untrustedExtension(): ?string
+{
+    foreach (['vector', 'postgres_fdw', 'dblink', 'file_fdw'] as $name) {
+        $found = committed()->scalar(
+            'select 1 from pg_available_extension_versions where name = ? and superuser and not trusted and requires is null limit 1',
+            [$name],
+        );
+
+        if ($found !== null) {
+            return $name;
+        }
+    }
+
+    return null;
+}
+
 function dropRestoreTarget(): void
 {
     $admin = Connections::open('teardown', [
@@ -128,6 +155,15 @@ describe('guarding an identifier', function (): void {
     it('refuses anything that would need quoting', function (string $name): void {
         Identifier::of($name);
     })->with(['drop table x', 'a"b', 'Mixed', '1leading', ''])->throws(InvalidArgumentException::class);
+
+    it('quotes an extension name, hyphen and all', function (): void {
+        expect(Identifier::quoted('uuid-ossp'))->toBe('"uuid-ossp"')
+            ->and(Identifier::quoted('vector'))->toBe('"vector"');
+    });
+
+    it('refuses an extension name that could close the quote', function (string $name): void {
+        Identifier::quoted($name);
+    })->with(['a"b', 'drop table x', 'a;b', ''])->throws(InvalidArgumentException::class);
 });
 
 describe('comparing two schemas', function (): void {
@@ -300,6 +336,111 @@ describe('a real dump and restore', function (): void {
         $second = app(Backup::class)->run('backups');
 
         expect($second['tier'])->toBe(BackupTier::Hourly);
+    });
+});
+
+describe('a dump that names an extension', function (): void {
+    beforeEach(function (): void {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('A dump needs a real server.');
+        }
+
+        if (env('NORIA_TEST_PG_ADMIN') === null) {
+            $this->markTestSkipped('Needs a second connection whose role bypasses row level security.');
+        }
+
+        if (env('NORIA_TEST_PG_SUPERUSER') === null) {
+            $this->markTestSkipped('Needs a superuser connection to install an untrusted extension.');
+        }
+
+        if (trim((string) shell_exec('command -v pg_dump')) === '') {
+            $this->markTestSkipped('pg_dump is not on PATH.');
+        }
+
+        $this->extension = untrustedExtension();
+
+        if ($this->extension === null) {
+            $this->markTestSkipped('This server has no untrusted extension to install.');
+        }
+
+        Storage::fake('backups');
+        config([
+            'noria.db.disk' => 'backups',
+            'noria.db.admin_connection' => 'noria_pg_admin',
+            'noria.db.superuser_connection' => 'noria_pg_superuser',
+        ]);
+
+        $extension = $this->extension;
+        asSuperuser(fn (Connection $server) => $server->statement("create extension if not exists \"{$extension}\""));
+
+        committed()->statement('drop table if exists widgets');
+        committed()->statement('create table widgets (id int primary key, name text)');
+        committed()->table('widgets')->insert([['id' => 1, 'name' => 'ours']]);
+    });
+
+    afterEach(function (): void {
+        if (env('NORIA_TEST_PG_ADMIN') === null || env('NORIA_TEST_PG_SUPERUSER') === null) {
+            return;
+        }
+
+        committed()->statement('drop table if exists widgets');
+
+        if (is_string($this->extension ?? null)) {
+            $extension = $this->extension;
+            asSuperuser(fn (Connection $server) => $server->statement("drop extension if exists \"{$extension}\""));
+        }
+
+        dropRestoreTarget();
+    });
+
+    it('installs what the dump needs before reading it, and says what it installed', function (): void {
+        $result = app(Backup::class)->run('backups');
+
+        $restored = app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
+
+        expect($restored['extensions'])->toBe([$this->extension]);
+
+        $beside = Connections::open('assert', [
+            ...Connections::asAdmin(Connections::settings()),
+            'database' => 'platform_test_restore',
+        ]);
+
+        try {
+            expect($beside->scalar('select 1 from pg_extension where extname = ?', [$this->extension]))->toBe(1)
+                ->and($beside->table('widgets')->pluck('name')->all())->toBe(['ours']);
+        } finally {
+            $beside->disconnect();
+        }
+    });
+
+    it('leaves the extension alone on a second restore into the same database', function (): void {
+        $result = app(Backup::class)->run('backups');
+
+        app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
+        $again = app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
+
+        expect($again['extensions'])->toBe([])
+            ->and($again['created'])->toBeFalse();
+    });
+
+    it('refuses rather than loading a dump it cannot equip the target for', function (): void {
+        config(['noria.db.superuser_connection' => null]);
+
+        $result = app(Backup::class)->run('backups');
+
+        expect(fn () => app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true))
+            ->toThrow(RuntimeException::class, 'create extension if not exists "'.$this->extension.'";');
+
+        $beside = Connections::open('assert', [
+            ...Connections::asAdmin(Connections::settings()),
+            'database' => 'platform_test_restore',
+        ]);
+
+        try {
+            expect($beside->scalar("select count(*) from pg_tables where schemaname = 'public'"))->toBe(0);
+        } finally {
+            $beside->disconnect();
+        }
     });
 });
 

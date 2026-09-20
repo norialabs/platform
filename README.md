@@ -212,7 +212,23 @@ would be the worse trade. Uploads and listings retry, because on object storage 
 failure and a rejection look identical once the disk swallows the reason.
 
 `restore --database=` restores beside the live database rather than over it, creating it and
-granting the application role in: a rehearsal that proves the dump before anybody bets on it.
+granting the application role in: a rehearsal that proves the dump before anybody bets on it. It
+loads in one transaction, so a dump that fails half way leaves an empty database rather than a
+partial one somebody mistakes for a restore.
+
+**A dump names the extensions it needs, and the target is equipped before it is read.** Those named
+by `CREATE EXTENSION` are installed as the restoring role first, and anything that role may not
+install - pgvector is the common one, because it is not a trusted extension - goes through
+`noria.db.superuser_connection`. Without one configured the restore refuses and prints the
+statements to run by hand, rather than failing on the dump's first line with a database half made.
+A target that already has them costs nothing: only what is actually missing is installed, so the
+second rehearsal into the same database needs no superuser at all.
+
+`COMMENT ON EXTENSION` comes off on the way in. `pg_dump` writes one per extension and only the
+owner may re-issue it, which the restoring role is not when a superuser installed it - and under
+`ON_ERROR_STOP` that one line is the difference between a restore and nothing. Dropping it at read
+time is what lets a dump already sitting on the disk be restored, rather than only the ones taken
+after this was noticed.
 
 `noria:rebuild` exists because migrations edited in place rather than added to leave a
 long-lived database behind for good - `migrate` sees every file already run, and the gap only
@@ -324,6 +340,7 @@ decoding it - a caller that decodes first has already allocated whatever was sen
 | Currency and minor units | `noria.money.*` |
 | Backup disk, tiers, retention, retries | `noria.db.*` |
 | The role dumps and restores run as | `noria.db.admin_connection` |
+| The role that may install an untrusted extension | `noria.db.superuser_connection` |
 | Tables a rebuild does not carry | `noria.db.rebuild.unrestored` |
 | Checks a rebuild ends on | `noria.db.rebuild.verify_commands` |
 | OTP length, TTL, attempts, resend wait | `noria.auth.otp.*` |
@@ -359,6 +376,13 @@ and they skip without it rather than passing against a file that would have come
 psql postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls createdb in role platform_test"
 
 NORIA_TEST_PG_ADMIN="pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test" vendor/bin/pest
+```
+
+Restoring a dump that names an untrusted extension needs a superuser, and those tests skip without
+one rather than passing against a dump that named nothing:
+
+```bash
+NORIA_TEST_PG_SUPERUSER="pgsql://you@127.0.0.1:5432/platform_test" vendor/bin/pest
 ```
 
 Without `NORIA_TEST_PG` the suite runs on SQLite and everything Postgres-only skips.
