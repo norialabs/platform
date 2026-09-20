@@ -7,3 +7,5 @@
 /phpunit.xml    export-ignore
 /pint.json      export-ignore
 /tests          export-ignore
+/vendor         export-ignore
+/composer.lock  export-ignore
