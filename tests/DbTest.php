@@ -147,6 +147,61 @@ describe('tiering and retention', function (): void {
     });
 });
 
+describe('sealing a dump', function (): void {
+    beforeEach(function (): void {
+        config(['noria.db.encryption_key' => 'base64:'.base64_encode(random_bytes(32))]);
+        $this->plain = app(Backup::class)->workingDirectory().'/seal-'.bin2hex(random_bytes(3)).'.sql.gz';
+        $this->body = random_bytes(2_500_000);
+        file_put_contents($this->plain, $this->body);
+    });
+
+    afterEach(function (): void {
+        foreach ([$this->plain, $this->plain.Backup::SEALED, $this->plain.'.out'] as $file) {
+            @unlink($file);
+        }
+    });
+
+    it('encrypts a dump larger than one chunk and opens it back byte for byte', function (): void {
+        $sealed = app(Backup::class)->seal($this->plain);
+
+        expect($sealed)->toEndWith(Backup::SEALED)
+            ->and(str_contains((string) file_get_contents($sealed), substr($this->body, 0, 64)))->toBeFalse();
+
+        app(Backup::class)->unseal($sealed, $this->plain.'.out');
+
+        expect(file_get_contents($this->plain.'.out'))->toBe($this->body);
+    });
+
+    it('leaves a dump as it is when no key is configured', function (): void {
+        config(['noria.db.encryption_key' => null]);
+
+        expect(app(Backup::class)->seal($this->plain))->toBe($this->plain);
+    });
+
+    it('refuses a sealed dump that was altered or cut short', function (string $damage): void {
+        $sealed = app(Backup::class)->seal($this->plain);
+        $bytes = (string) file_get_contents($sealed);
+        file_put_contents($sealed, $damage === 'altered' ? substr_replace($bytes, 'x', 5_000, 1) : substr($bytes, 0, -100));
+
+        expect(fn () => app(Backup::class)->unseal($sealed, $this->plain.'.out'))
+            ->toThrow(RuntimeException::class, 'tampered with');
+    })->with(['altered', 'truncated']);
+
+    it('refuses to open a dump with a different key', function (): void {
+        $sealed = app(Backup::class)->seal($this->plain);
+        config(['noria.db.encryption_key' => 'base64:'.base64_encode(random_bytes(32))]);
+
+        expect(fn () => app(Backup::class)->unseal($sealed, $this->plain.'.out'))
+            ->toThrow(RuntimeException::class, 'another key');
+    });
+
+    it('refuses a key that is not 32 bytes', function (): void {
+        config(['noria.db.encryption_key' => 'base64:'.base64_encode('short')]);
+
+        app(Backup::class)->seal($this->plain);
+    })->throws(RuntimeException::class, 'must be 32 bytes');
+});
+
 describe('guarding an identifier', function (): void {
     it('accepts a plain name', function (): void {
         expect(Identifier::of('zana_copy_1'))->toBe('zana_copy_1');
@@ -340,6 +395,54 @@ describe('a real dump and restore', function (): void {
         try {
             expect($beside->scalar("select count(*) from pg_proc where proname = 'widget_guard'"))->toBe(1)
                 ->and($beside->table('widgets')->count())->toBe(2);
+        } finally {
+            $beside->disconnect();
+            dropRestoreTarget();
+        }
+    });
+
+    it('uploads an encrypted dump when a key is set, and restores it', function (): void {
+        config(['noria.db.encryption_key' => 'base64:'.base64_encode(random_bytes(32))]);
+
+        $result = app(Backup::class)->run('backups');
+
+        expect($result['key'])->toEndWith('.sql.gz'.Backup::SEALED)
+            ->and(@gzdecode((string) Storage::disk('backups')->get($result['key'])))->toBeFalse();
+
+        $restored = app(Restore::class)->run(null, 'backups', 'platform_test_restore', force: true);
+
+        $beside = Connections::open('assert', [
+            ...Connections::asAdmin(Connections::settings()),
+            'database' => 'platform_test_restore',
+        ]);
+
+        try {
+            expect($restored['key'])->toBe($result['key'])
+                ->and($beside->table('widgets')->count())->toBe(2);
+        } finally {
+            $beside->disconnect();
+            dropRestoreTarget();
+        }
+    });
+
+    it('leaves the database as it was when the dump it is loading fails partway', function (): void {
+        $result = app(Backup::class)->run('backups');
+        app(Restore::class)->run($result['key'], 'backups', 'platform_test_restore', force: true);
+
+        $broken = 'backups/hourly/20990101-000000-aaaaaa-broken.sql.gz';
+        Storage::disk('backups')->put($broken, (string) gzencode("create table half_loaded (id int);\nselect no_such_function();\n"));
+
+        $beside = Connections::open('assert', [
+            ...Connections::asAdmin(Connections::settings()),
+            'database' => 'platform_test_restore',
+        ]);
+
+        try {
+            expect(fn () => app(Restore::class)->run($broken, 'backups', 'platform_test_restore', force: true))
+                ->toThrow(RuntimeException::class, 'psql failed');
+
+            expect($beside->table('widgets')->count())->toBe(2)
+                ->and($beside->scalar("select count(*) from pg_tables where tablename = 'half_loaded'"))->toBe(0);
         } finally {
             $beside->disconnect();
             dropRestoreTarget();

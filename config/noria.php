@@ -147,6 +147,7 @@ return [
         'compression' => (int) env('NORIA_BACKUP_COMPRESSION', 9),
         'gzip' => (bool) env('NORIA_BACKUP_GZIP', true),
         'working_directory' => env('NORIA_BACKUP_WORKDIR'),
+        'encryption_key' => env('NORIA_BACKUP_ENCRYPTION_KEY'),
 
         'attempts' => (int) env('NORIA_BACKUP_ATTEMPTS', 3),
 

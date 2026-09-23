@@ -6,17 +6,19 @@ namespace NoriaLabs\Platform\Db\Dumpers;
 
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Process;
 use NoriaLabs\Platform\Contracts\DatabaseDumper;
 use NoriaLabs\Platform\Contracts\DatabaseMaintainer;
+use NoriaLabs\Platform\Contracts\DatabaseReplacer;
 use NoriaLabs\Platform\Db\Connections;
 use NoriaLabs\Platform\Db\Identifier;
 use NoriaLabs\Platform\Db\Schemas;
 use RuntimeException;
 use Throwable;
 
-class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
+class PostgresDumper implements DatabaseDumper, DatabaseMaintainer, DatabaseReplacer
 {
     private const CREATE_EXTENSION = '/^\s*CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?"?([A-Za-z0-9_-]+)"?/i';
 
@@ -51,7 +53,34 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
     /** @param array<string, mixed> $connection */
     public function restore(array $connection, string $source): void
     {
+        $this->load($connection, $source, []);
+    }
+
+    /** @param array<string, mixed> $connection */
+    public function replace(array $connection, string $source): int
+    {
+        $admin = Connections::open('replace', $connection);
+
+        try {
+            $before = $admin->scalar('select count(*) from pg_tables where schemaname = current_schema()');
+            $statements = $this->dropStatements($admin);
+        } finally {
+            $admin->disconnect();
+        }
+
+        $this->load($connection, $source, $statements);
+
+        return is_numeric($before) ? (int) $before : 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $connection
+     * @param  list<string>  $clearFirst
+     */
+    private function load(array $connection, string $source, array $clearFirst): void
+    {
         $readable = $this->withoutExtensionComments($source);
+        $preamble = $clearFirst === [] ? null : $this->preamble($source, $clearFirst);
 
         try {
             $this->run($connection, [
@@ -60,13 +89,75 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
                 '--single-transaction',
                 '--set=ON_ERROR_STOP=1',
                 '--quiet',
+                ...($preamble === null ? [] : ['--file='.$preamble]),
                 '--file='.$readable,
             ], 'psql');
         } finally {
-            if ($readable !== $source && is_file($readable)) {
-                @unlink($readable);
+            foreach ([$readable === $source ? null : $readable, $preamble] as $scratch) {
+                if ($scratch !== null && is_file($scratch)) {
+                    @unlink($scratch);
+                }
             }
         }
+    }
+
+    /** @param list<string> $statements */
+    private function preamble(string $source, array $statements): string
+    {
+        $path = $source.'.clear.sql';
+
+        if (@file_put_contents($path, implode(";\n", $statements).";\n") === false) {
+            throw new RuntimeException("Unable to write the restore preamble to {$path}.");
+        }
+
+        return $path;
+    }
+
+    /** @return list<string> */
+    private function dropStatements(Connection $admin): array
+    {
+        $builder = $admin->getSchemaBuilder();
+        $grammar = $admin->getSchemaGrammar();
+
+        if (! $grammar instanceof PostgresGrammar) {
+            throw new RuntimeException('A Postgres restore needs the Postgres schema grammar.');
+        }
+
+        $schemas = $builder->getCurrentSchemaListing();
+        $configured = $admin->getConfig('dont_drop');
+        $excluded = is_array($configured) ? array_values(array_filter($configured, is_string(...))) : ['spatial_ref_sys'];
+
+        $views = array_column($builder->getViews($schemas), 'schema_qualified_name');
+
+        $tables = [];
+        foreach ($builder->getTables($schemas) as $table) {
+            if (array_intersect([$table['name'], $table['schema_qualified_name']], $excluded) === []) {
+                $tables[] = $table['schema_qualified_name'];
+            }
+        }
+
+        $types = [];
+        $domains = [];
+        foreach ($builder->getTypes($schemas) as $type) {
+            if (! $type['implicit']) {
+                if ($type['type'] === 'domain') {
+                    $domains[] = $type['schema_qualified_name'];
+                } else {
+                    $types[] = $type['schema_qualified_name'];
+                }
+            }
+        }
+
+        return array_values(array_filter([
+            $views === [] ? null : $grammar->compileDropAllViews($views),
+            $tables === [] ? null : $grammar->compileDropAllTables($tables),
+            $types === [] ? null : $grammar->compileDropAllTypes($types),
+            $domains === [] ? null : $grammar->compileDropAllDomains($domains),
+            ...array_map(
+                fn (array $routine): string => "drop {$routine['keyword']} if exists {$routine['signature']} cascade",
+                Schemas::routines($admin),
+            ),
+        ], is_string(...)));
     }
 
     /**
@@ -202,13 +293,8 @@ class PostgresDumper implements DatabaseDumper, DatabaseMaintainer
         try {
             $before = $admin->scalar('select count(*) from pg_tables where schemaname = current_schema()');
 
-            $builder = $admin->getSchemaBuilder();
-            $builder->dropAllViews();
-            $builder->dropAllTables();
-            $builder->dropAllTypes();
-
-            foreach (Schemas::routines($admin) as $routine) {
-                $admin->statement("drop {$routine['keyword']} if exists {$routine['signature']} cascade");
+            foreach ($this->dropStatements($admin) as $statement) {
+                $admin->statement($statement);
             }
 
             return is_numeric($before) ? (int) $before : 0;

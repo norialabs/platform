@@ -58,19 +58,28 @@ class Otp
             return OtpOutcome::Expired;
         }
 
-        if ($challenge->attempts >= Config::integer('noria.auth.otp.attempts', 5)) {
-            return OtpOutcome::Exhausted;
-        }
+        $maxAttempts = Config::integer('noria.auth.otp.attempts', 5);
 
-        $challenge->increment('attempts');
+        $claimed = Platform::otpChallengeModel()::query()
+            ->whereKey($challenge->getKey())
+            ->whereNull('consumed_at')
+            ->where('attempts', '<', $maxAttempts)
+            ->increment('attempts');
+
+        if ($claimed === 0) {
+            return $challenge->fresh()?->consumed_at === null ? OtpOutcome::Exhausted : OtpOutcome::NoChallenge;
+        }
 
         if (! Hash::check($code, $challenge->code_hash)) {
             return OtpOutcome::Incorrect;
         }
 
-        $challenge->forceFill(['consumed_at' => Carbon::now()])->save();
+        $consumed = Platform::otpChallengeModel()::query()
+            ->whereKey($challenge->getKey())
+            ->whereNull('consumed_at')
+            ->update(['consumed_at' => Carbon::now()]);
 
-        return OtpOutcome::Verified;
+        return $consumed === 1 ? OtpOutcome::Verified : OtpOutcome::NoChallenge;
     }
 
     public function secondsUntilNextIssue(Destination $to): ?int

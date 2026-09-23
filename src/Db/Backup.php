@@ -15,6 +15,10 @@ use Throwable;
 
 class Backup
 {
+    public const SEALED = '.enc';
+
+    private const CHUNK = 1_048_576;
+
     public function __construct(private DumperFactory $dumpers) {}
 
     /** @return array{key: string, disk: string, tier: BackupTier, bytes: int, pruned: int} */
@@ -37,8 +41,9 @@ class Backup
                 throw new RuntimeException('The dump is empty.');
             }
 
-            $key = BackupTier::Hourly->prefix().'/'.basename($path);
-            $this->upload($disk, $key, $path);
+            $sealed = $this->seal($path);
+            $key = BackupTier::Hourly->prefix().'/'.basename($sealed);
+            $this->upload($disk, $key, $sealed);
 
             if ($tier === BackupTier::Daily) {
                 $key = $this->promote($disk, $key);
@@ -225,6 +230,79 @@ class Backup
         return $directory."/{$stamp}-{$suffix}-{$database}.{$extension}";
     }
 
+    public function seal(string $path): string
+    {
+        $key = $this->encryptionKey();
+
+        if ($key === null) {
+            return $path;
+        }
+
+        $sealed = $path.self::SEALED;
+        [$source, $target] = $this->openPair($path, $sealed);
+
+        try {
+            /** @var array{0: string, 1: string} $pushed */
+            $pushed = sodium_crypto_secretstream_xchacha20poly1305_init_push($key);
+            $state = $pushed[0];
+            fwrite($target, $pushed[1]);
+
+            do {
+                $chunk = (string) fread($source, self::CHUNK);
+                $last = feof($source);
+                $cipher = sodium_crypto_secretstream_xchacha20poly1305_push(
+                    $state,
+                    $chunk,
+                    '',
+                    $last ? SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL : SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_MESSAGE,
+                );
+                fwrite($target, pack('N', strlen($cipher)).$cipher);
+            } while (! $last);
+        } finally {
+            fclose($source);
+            fclose($target);
+        }
+
+        return $sealed;
+    }
+
+    public function unseal(string $sealed, string $destination): void
+    {
+        $key = $this->encryptionKey()
+            ?? throw new RuntimeException('This dump is encrypted and noria.db.encryption_key is not set.');
+
+        [$source, $target] = $this->openPair($sealed, $destination);
+
+        try {
+            $header = (string) fread($source, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
+
+            if (strlen($header) !== SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES) {
+                throw new RuntimeException("The encrypted dump at {$sealed} is truncated.");
+            }
+
+            $state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($header, $key);
+            $finished = false;
+
+            while (! $finished) {
+                $length = unpack('N', (string) fread($source, 4));
+                $size = is_array($length) && is_int($length[1]) ? $length[1] : 0;
+                $cipher = $size > 0 ? (string) fread($source, $size) : '';
+                /** @var array{0: string, 1: int}|false $opened */
+                $opened = $cipher === '' ? false : sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
+
+                if ($opened === false) {
+                    throw new RuntimeException("The encrypted dump at {$sealed} is truncated, tampered with, or was sealed with another key.");
+                }
+
+                fwrite($target, $opened[0]);
+                $finished = $opened[1] === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL;
+            }
+        } finally {
+            fclose($source);
+            fclose($target);
+        }
+    }
+
     public function workingDirectory(): string
     {
         $configured = Config::get('noria.db.working_directory');
@@ -250,9 +328,46 @@ class Backup
         return $stamp instanceof Carbon ? $stamp : null;
     }
 
+    private function encryptionKey(): ?string
+    {
+        $configured = Config::get('noria.db.encryption_key');
+
+        if (! is_string($configured) || $configured === '') {
+            return null;
+        }
+
+        $key = str_starts_with($configured, 'base64:') ? base64_decode(substr($configured, 7), true) : $configured;
+
+        if (! is_string($key) || strlen($key) !== SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES) {
+            throw new RuntimeException('noria.db.encryption_key must be 32 bytes, written as base64:<key>.');
+        }
+
+        return $key;
+    }
+
+    /** @return array{0: resource, 1: resource} */
+    private function openPair(string $from, string $to): array
+    {
+        $source = @fopen($from, 'rb');
+
+        if ($source === false) {
+            throw new RuntimeException("Unable to read {$from}.");
+        }
+
+        $target = @fopen($to, 'wb');
+
+        if ($target === false) {
+            fclose($source);
+
+            throw new RuntimeException("Unable to write {$to}.");
+        }
+
+        return [$source, $target];
+    }
+
     private function forget(string $path): void
     {
-        foreach ([$path, preg_replace('/\.gz$/', '', $path)] as $candidate) {
+        foreach ([$path, $path.self::SEALED, preg_replace('/\.gz$/', '', $path)] as $candidate) {
             if (is_string($candidate) && is_file($candidate)) {
                 @unlink($candidate);
             }

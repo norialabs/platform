@@ -7,6 +7,7 @@ namespace NoriaLabs\Platform\Db;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config;
 use NoriaLabs\Platform\Contracts\DatabaseMaintainer;
+use NoriaLabs\Platform\Contracts\DatabaseReplacer;
 use RuntimeException;
 
 class Restore
@@ -57,13 +58,22 @@ class Restore
         $plain = $this->backups->workingDirectory()."/restore-{$stamp}.sql";
 
         try {
-            $bytes = $this->download($disk, $key, $archive);
+            if (str_ends_with($key, Backup::SEALED)) {
+                $bytes = $this->download($disk, $key, $archive.Backup::SEALED);
+                $this->backups->unseal($archive.Backup::SEALED, $archive);
+            } else {
+                $bytes = $this->download($disk, $key, $archive);
+            }
+
             $source = $this->expand($archive, $plain);
 
             $extensions = $dumper instanceof DatabaseMaintainer ? $dumper->ensureExtensions($settings, $source) : [];
-            $dropped = $dumper instanceof DatabaseMaintainer ? $dumper->dropExisting($settings) : 0;
-
-            $dumper->restore($settings, $source);
+            if ($dumper instanceof DatabaseReplacer) {
+                $dropped = $dumper->replace($settings, $source);
+            } else {
+                $dropped = $dumper instanceof DatabaseMaintainer ? $dumper->dropExisting($settings) : 0;
+                $dumper->restore($settings, $source);
+            }
 
             return [
                 'key' => $key,
@@ -75,7 +85,7 @@ class Restore
                 'extensions' => $extensions,
             ];
         } finally {
-            foreach ([$archive, $plain] as $file) {
+            foreach ([$archive.Backup::SEALED, $archive, $plain] as $file) {
                 if (is_file($file)) {
                     @unlink($file);
                 }

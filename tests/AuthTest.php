@@ -102,6 +102,31 @@ it('counts a guess before checking it, so a crash costs an attempt rather than g
     expect(OtpChallenge::query()->sole()->attempts)->toBe(1);
 });
 
+it('refuses the last guess a concurrent request already spent', function (): void {
+    config(['noria.auth.otp.attempts' => 3]);
+
+    $otp = app(Otp::class);
+    $code = $otp->issue(to('ada@example.com'));
+
+    OtpChallenge::retrieved(function (OtpChallenge $challenge): void {
+        OtpChallenge::query()->whereKey($challenge->getKey())->update(['attempts' => 3]);
+    });
+
+    expect($otp->verify(to('ada@example.com'), $code))->toBe(OtpOutcome::Exhausted)
+        ->and(OtpChallenge::query()->sole()->attempts)->toBe(3);
+});
+
+it('lets only one of two requests carrying the right code sign in', function (): void {
+    $otp = app(Otp::class);
+    $code = $otp->issue(to('ada@example.com'));
+
+    OtpChallenge::retrieved(function (OtpChallenge $challenge): void {
+        OtpChallenge::query()->whereKey($challenge->getKey())->update(['consumed_at' => now()]);
+    });
+
+    expect($otp->verify(to('ada@example.com'), $code))->toBe(OtpOutcome::NoChallenge);
+});
+
 it('cannot be used twice', function (): void {
     $otp = app(Otp::class);
     $code = $otp->issue(to('ada@example.com'));
