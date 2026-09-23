@@ -212,9 +212,17 @@ would be the worse trade. Uploads and listings retry, because on object storage 
 failure and a rejection look identical once the disk swallows the reason.
 
 `restore --database=` restores beside the live database rather than over it, creating it and
-granting the application role in: a rehearsal that proves the dump before anybody bets on it. It
-loads in one transaction, so a dump that fails half way leaves an empty database rather than a
-partial one somebody mistakes for a restore.
+granting the application role in: a rehearsal that proves the dump before anybody bets on it. The
+drop of what is there and the load of the dump run in one transaction, so a dump that fails half
+way leaves the database exactly as it was, neither emptied nor half loaded.
+
+**Set `noria.db.encryption_key` and every dump is encrypted before it leaves the machine.** It
+takes 32 bytes written as `base64:<key>` (`openssl rand -base64 32`), and seals the dump with
+libsodium's XChaCha20-Poly1305 stream, so whoever holds the bucket credentials holds ciphertext.
+Sealed dumps end in `.enc` and restore opens them with the same key; a dump that was altered, cut
+short or sealed under another key is refused rather than loaded. Without a key nothing changes, and
+dumps taken before a key was set still restore. Keep the key somewhere other than the bucket: a
+backup you cannot decrypt is not a backup.
 
 **A dump names the extensions it needs, and the target is equipped before it is read.** Those named
 by `CREATE EXTENSION` are installed as the restoring role first, and anything that role may not
@@ -339,6 +347,7 @@ decoding it - a caller that decodes first has already allocated whatever was sen
 | CSP directives | `noria.http.security_headers.directives` |
 | Currency and minor units | `noria.money.*` |
 | Backup disk, tiers, retention, retries | `noria.db.*` |
+| The key dumps are encrypted with | `noria.db.encryption_key` |
 | The role dumps and restores run as | `noria.db.admin_connection` |
 | The role that may install an untrusted extension | `noria.db.superuser_connection` |
 | Tables a rebuild does not carry | `noria.db.rebuild.unrestored` |
