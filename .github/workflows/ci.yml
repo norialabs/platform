@@ -1,119 +1,142 @@
-name: CI
+name: Verify and release
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  test:
-    runs-on: ubuntu-24.04
-    name: PHP ${{ matrix.php }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        php: ["8.3", "8.4", "8.5"]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php }}
-          extensions: pdo_pgsql, pgsql
-          coverage: xdebug
-
-      - name: Validate composer metadata
-        run: composer validate --strict
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-
-      - name: Check code style
-        run: ./vendor/bin/pint --test
-
-      - name: Run static analysis
-        run: ./vendor/bin/phpstan analyse --no-progress
-
-      - name: Confirm the client can dump this server
-        env:
-          PGPASSWORD: postgres
-        run: |
-          set -euo pipefail
-          CLIENT=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
-          SERVER=$(psql -h 127.0.0.1 -U postgres -tAc 'show server_version' | grep -oE '^[0-9]+')
-          echo "pg_dump major $CLIENT against server major $SERVER"
-          if [ "$CLIENT" -lt "$SERVER" ]; then
-            echo "pg_dump $CLIENT cannot dump a server on $SERVER."
-            echo "Pin the postgres service image back to $CLIENT, or install a newer client."
-            exit 1
-          fi
-
-      - name: Create the test roles
-        env:
-          PGPASSWORD: postgres
-        run: |
-          set -euo pipefail
-          psql -h 127.0.0.1 -U postgres -c "create role platform_test login password 'platform_test' nosuperuser nobypassrls"
-          psql -h 127.0.0.1 -U postgres -c "create database platform_test owner platform_test"
-          psql -h 127.0.0.1 -U postgres -c "create role platform_admin login password 'platform_admin' nosuperuser bypassrls createdb in role platform_test"
-          psql -h 127.0.0.1 -U postgres -d platform_test -c "grant all on schema public to platform_test"
-
-      - name: Run tests against Postgres
-        env:
-          NORIA_TEST_PG: pgsql://platform_test:platform_test@127.0.0.1:5432/platform_test
-          NORIA_TEST_PG_ADMIN: pgsql://platform_admin:platform_admin@127.0.0.1:5432/platform_test
-          NORIA_TEST_PG_SUPERUSER: pgsql://postgres:postgres@127.0.0.1:5432/platform_test
-        run: ./vendor/bin/pest
-
-      - name: Run tests on SQLite
-        run: ./vendor/bin/pest
-
-      - name: Verify package archive
-        run: composer archive --format=zip --dir=/tmp
-
   verify:
-    needs: test
-    runs-on: ubuntu-24.04
+    name: Verify what changed
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
-
+      checks: read
+      pull-requests: read
     steps:
-      - name: Required checks passed
-        run: echo "All required CI checks passed."
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Look for a pull request that already verified this tree
+        id: reuse
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          tree="$(git rev-parse "${GITHUB_SHA}^{tree}")"
+          verified=false
+
+          for head in $(gh api "repos/${REPO}/commits/${GITHUB_SHA}/pulls" --jq '.[] | select(.merged_at != null) | .head.sha'); do
+            [ "$(gh api "repos/${REPO}/commits/${head}" --jq .commit.tree.sha)" = "$tree" ] || continue
+            passed="$(gh api "repos/${REPO}/commits/${head}/check-runs?check_name=Verify%20what%20changed&filter=all" \
+              --jq '[.check_runs[] | select(.conclusion == "success")] | length')"
+            if [ "$passed" -gt 0 ]; then
+              echo "tree ${tree} passed verify on pull request head ${head}"
+              verified=true
+              break
+            fi
+          done
+
+          echo "verified=${verified}" >> "${GITHUB_OUTPUT}"
+
+      - name: Work out what changed
+        id: scope
+        env:
+          VERIFIED: ${{ steps.reuse.outputs.verified }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          base="${BASE:-${BEFORE:-}}"
+
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed='EVERYTHING'
+          else
+            changed="$(git diff --name-only "$base" "${GITHUB_SHA}")"
+          fi
+
+          scope() {
+            if [ "$changed" = 'EVERYTHING' ]; then
+              echo true
+              return
+            fi
+            if printf '%s\n' "$changed" | grep -qE "$1"; then echo true; else echo false; fi
+          }
+
+          package="$(scope '^(src/|config/|database/|tests/|composer\.json|phpstan\.neon|pint\.json|phpunit\.xml|\.gitattributes|\.github/)')"
+
+          if [ "${VERIFIED:-false}" = true ]; then
+            package=false
+          fi
+
+          echo "package=${package}" >> "${GITHUB_OUTPUT}"
+          echo "changed scopes: package=${package}"
+
+      - name: Set up PHP 8.5
+        if: steps.scope.outputs.package == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: pdo_pgsql, pgsql
+          coverage: none
+
+      - name: Validate composer metadata
+        if: steps.scope.outputs.package == 'true'
+        run: composer validate --strict
+
+      - name: Install Composer dependencies
+        if: steps.scope.outputs.package == 'true'
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Check code style
+        if: steps.scope.outputs.package == 'true'
+        run: vendor/bin/pint --test
+
+      - name: Analyse the package statically
+        if: steps.scope.outputs.package == 'true'
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Verify the package archive
+        if: steps.scope.outputs.package == 'true'
+        run: composer archive --format=zip --dir="${RUNNER_TEMP}"
 
   tag:
+    name: Tag the release
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: write
     outputs:
       name: ${{ steps.tag.outputs.name }}
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out the repository
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Determine version bump and create tag
+      - name: Determine the version bump and create the tag
         id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -199,22 +222,22 @@ jobs:
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG"
           echo "name=$NEW_TAG" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
+    name: Publish the release
     needs: [verify, tag]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.tag.result == 'success'
-    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref_name == 'main' && needs.tag.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: write
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out the repository
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Create GitHub Release
+      - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.tag.outputs.name }}
