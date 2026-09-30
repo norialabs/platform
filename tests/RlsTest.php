@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use NoriaLabs\Platform\Tenancy\Invariants;
 use NoriaLabs\Platform\Tenancy\Rls;
 use NoriaLabs\Platform\Tenancy\Tenancy;
+use NoriaLabs\Platform\Tenancy\TenancyMissing;
 
 const WORKSPACE_A = '01a0b000-0000-7000-8000-00000000000a';
 const WORKSPACE_B = '01a0b000-0000-7000-8000-00000000000b';
@@ -149,4 +150,43 @@ it('does not report its own unscoped tables as unprotected', function (): void {
         ->not->toContain('audit_logs')
         ->not->toContain('otp_challenges')
         ->not->toContain('invitations');
+});
+
+it('looks for unprotected tenant tables in every schema the application reads', function (): void {
+    DB::statement('create schema tenant_zone');
+    DB::statement('set local search_path = tenant_zone, public');
+    DB::statement('create table tenant_zone.widgets (id uuid primary key, workspace_id uuid)');
+
+    expect(Invariants::tablesWithoutPolicy())->toContain('widgets');
+
+    DB::statement('alter table tenant_zone.widgets enable row level security');
+
+    expect(Invariants::tablesWithUnforcedPolicy())->toContain('widgets');
+});
+
+it('keeps the workspace it had when a switch fails inside a broken transaction', function (): void {
+    $tenancy = app(Tenancy::class);
+    $tenancy->set(WORKSPACE_A);
+
+    DB::beginTransaction();
+
+    try {
+        DB::statement('select 1/0');
+    } catch (QueryException) {
+    }
+
+    expect(fn () => $tenancy->run(WORKSPACE_B, fn () => null))->toThrow(QueryException::class)
+        ->and($tenancy->id())->toBe(WORKSPACE_A);
+
+    DB::rollBack();
+
+    expect(DB::scalar("select current_setting('app.workspace_id', true)"))->toBe(WORKSPACE_A);
+});
+
+it('widens a connection with every requested setting or with none of them', function (): void {
+    $tenancy = app(Tenancy::class);
+
+    expect(fn () => $tenancy->withGuc(['app.staff_read' => 'on', 'app.undeclared' => 'x'], fn () => null))
+        ->toThrow(TenancyMissing::class)
+        ->and(DB::scalar("select current_setting('app.staff_read', true)"))->not->toBe('on');
 });

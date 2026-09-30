@@ -38,11 +38,11 @@ class Invariants
             from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
             join pg_attribute a on a.attrelid = c.oid and a.attname = ? and a.attnum > 0
-            where n.nspname = 'public'
+            where n.nspname = any(current_schemas(false))
               and c.relkind = 'r'
               and not exists (
                   select 1 from pg_policies p
-                  where p.tablename = c.relname and p.policyname like '%tenant_isolation'
+                  where p.schemaname = n.nspname and p.tablename = c.relname and p.policyname like '%tenant_isolation'
               )
             order by 1
         SQL, [Config::string('noria.tenancy.column', 'workspace_id')]);
@@ -57,7 +57,7 @@ class Invariants
             select c.relname as table_name
             from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
-            where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity and not c.relforcerowsecurity
+            where n.nspname = any(current_schemas(false)) and c.relkind = 'r' and c.relrowsecurity and not c.relforcerowsecurity
             order by 1
         SQL);
 
