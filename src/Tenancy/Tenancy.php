@@ -30,8 +30,8 @@ class Tenancy
 
     public function set(string $workspaceId): void
     {
-        $this->workspaceId = $workspaceId;
         $this->pushGuc($this->workspaceGuc(), $workspaceId);
+        $this->workspaceId = $workspaceId;
     }
 
     public function clear(): void
@@ -55,7 +55,10 @@ class Tenancy
         try {
             return $callback();
         } finally {
-            $this->restore(fn () => $previous === null ? $this->clearWorkspace() : $this->set($previous));
+            $this->restore(function () use ($previous): void {
+                $this->workspaceId = $previous;
+                $this->pushGuc($this->workspaceGuc(), $previous ?? '');
+            });
         }
     }
 
@@ -72,17 +75,14 @@ class Tenancy
 
         foreach ($settings as $name => $value) {
             $previous[$name] = $this->gucs[$name] ?? '';
-            $this->pushGuc($name, $value);
         }
+
+        $this->pushGucs($settings);
 
         try {
             return $callback();
         } finally {
-            $this->restore(function () use ($previous): void {
-                foreach ($previous as $name => $value) {
-                    $this->pushGuc($name, $value);
-                }
-            });
+            $this->restore(fn () => $this->pushGucs($previous));
         }
     }
 
@@ -119,12 +119,6 @@ class Tenancy
                 DB::disconnect(Platform::connection());
             }
         }
-    }
-
-    private function clearWorkspace(): void
-    {
-        $this->workspaceId = null;
-        $this->pushGuc($this->workspaceGuc(), '');
     }
 
     private function pushGuc(string $name, string $value): void
